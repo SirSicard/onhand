@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
-import { convert } from "./broker";
-import { detectFormat, type FormatId } from "./formats";
+import { convert, enginesFor, prewarm } from "./broker";
+import { FORMATS, detectFormat, targetsFor, type FormatId } from "./formats";
 
 /**
  * The conversion matrix, run in a real browser against real files.
@@ -170,4 +170,138 @@ describe("failure behaviour", () => {
     const junk = new File([new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8])], "broken.png");
     await expect(convert(junk, "png", "jpeg", {}, () => {})).rejects.toThrow();
   });
+});
+
+describe("prewarm", () => {
+  it("makes the pair it warmed measurably faster, and does not change the output", async () => {
+    // heic→jpeg is the pair this matters most for: libheif is 1.5 MB of module
+    // plus a wasm compile, and it is the conversion most visitors arrive for.
+    const file = await fixture("photo.heic");
+
+    await prewarm("heic", "jpeg");
+
+    const started = performance.now();
+    const result = await convert(file, "heic", "jpeg", {}, () => {});
+    const warmMs = performance.now() - started;
+
+    // The output must be a real JPEG, not a warm side effect that broke it.
+    const bytes = new Uint8Array(await result.blob.arrayBuffer());
+    expect([bytes[0], bytes[1]]).toEqual([0xff, 0xd8]);
+
+    // Not asserting a specific speedup — that is hardware-dependent and would
+    // be a flaky test. Asserting that a warmed conversion is quick in absolute
+    // terms: cold, this pair spends seconds fetching and compiling libheif.
+    expect(warmMs, `warmed heic→jpeg took ${Math.round(warmMs)}ms`).toBeLessThan(4000);
+  }, 60_000);
+
+  it("stays silent on a pair it cannot warm, rather than throwing", async () => {
+    // Video is ffmpeg's job and must never be warmed — the core is 9.7 MB.
+    // The call should no-op, not reject and not download anything.
+    await expect(prewarm("mp4", "gif")).resolves.toBeUndefined();
+    await expect(prewarm("png", "pdf")).resolves.toBeUndefined();
+  }, 30_000);
+});
+
+describe("the offered matrix and the engines agree", () => {
+  it("has an engine for every pair targetsFor advertises", async () => {
+    // The gap this closes: formats.test.ts checks that every offered target is
+    // `encodable`, which is a property of the format, not of any engine. When
+    // GIF became encodable (video → animated GIF), the document branch of
+    // targetsFor started advertising pdf → gif — a pair no engine performs. It
+    // was live in the /formats table and in the target dropdown.
+    //
+    // Checking the flag was never enough. This asks the brokers' actual
+    // candidate list, which is what a real conversion asks.
+    const orphans: string[] = [];
+    for (const source of Object.values(FORMATS)) {
+      for (const target of targetsFor(source.id)) {
+        if (target.id === source.id) continue;
+        if ((await enginesFor(source.id, target.id)).length === 0) {
+          orphans.push(`${source.id} → ${target.id}`);
+        }
+      }
+    }
+    expect(orphans, "offered to users but no engine handles them").toEqual([]);
+  }, 30_000);
+});
+
+describe("transparency", () => {
+  /** The pixel index (r channel) of the first fully transparent pixel, or -1. */
+  async function firstTransparent(blob: Blob): Promise<number> {
+    const bitmap = await createImageBitmap(blob);
+    const c = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const ctx = c.getContext("2d")!;
+    ctx.drawImage(bitmap, 0, 0);
+    const { data } = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
+    for (let i = 3; i < data.length; i += 4) if (data[i] === 0) return i - 3;
+    return -1;
+  }
+
+  async function rgbAt(blob: Blob, idx: number): Promise<[number, number, number]> {
+    const bitmap = await createImageBitmap(blob);
+    const c = new OffscreenCanvas(bitmap.width, bitmap.height);
+    const ctx = c.getContext("2d")!;
+    ctx.drawImage(bitmap, 0, 0);
+    const { data } = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
+    return [data[idx]!, data[idx + 1]!, data[idx + 2]!];
+  }
+
+  it("composites onto white for JPEG rather than leaving it black", async () => {
+    // Regression. mozjpeg ignores the alpha byte instead of erroring, so a
+    // transparent pixel encoded as whatever RGB sat underneath it — which for a
+    // transparent PNG is (0,0,0). Every logo with a transparent background came
+    // out of here on a black one, and nothing failed or warned.
+    const file = await fixture("graphic-alpha.png");
+    const idx = await firstTransparent(new Blob([await file.arrayBuffer()], { type: "image/png" }));
+    expect(idx, "fixture has no transparent pixel — this test proves nothing").toBeGreaterThan(-1);
+
+    const jpeg = await convert(file, "png", "jpeg", {}, () => {});
+    const [r, g, b] = await rgbAt(jpeg.blob, idx);
+
+    // JPEG is lossy, so exact 255 is not guaranteed at a colour boundary.
+    // Near-white is the assertion; near-black is the bug.
+    expect(
+      Math.min(r, g, b),
+      `transparent pixel encoded as rgb(${r},${g},${b}) — should be near white`,
+    ).toBeGreaterThan(200);
+  }, 60_000);
+
+  it("keeps the alpha channel for targets that have one", async () => {
+    const file = await fixture("graphic-alpha.png");
+    const idx = await firstTransparent(new Blob([await file.arrayBuffer()], { type: "image/png" }));
+
+    for (const target of ["webp", "png", "avif"] as const) {
+      const out = await convert(file, "png", target, {}, () => {});
+      expect(await firstTransparent(out.blob), `${target} lost the alpha channel`).toBeGreaterThan(
+        -1,
+      );
+      expect(idx).toBeGreaterThan(-1);
+    }
+  }, 120_000);
+});
+
+describe("metadata", () => {
+  /** Does this JPEG carry an APP1/Exif segment? */
+  function hasExif(bytes: Uint8Array): boolean {
+    const text = Array.from(bytes.slice(0, 4096), (b) => String.fromCharCode(b)).join("");
+    return text.includes("Exif");
+  }
+
+  it("removes EXIF from images whether or not the box is ticked", async () => {
+    // The Strip metadata checkbox is honoured only by the ffmpeg engine. Images
+    // go decode-to-pixels then re-encode, which discards EXIF as a side effect
+    // and cannot preserve it. That is the right default — a photo carries the
+    // GPS coordinates of where it was taken — but the UI must not imply the
+    // control does something here, and this test is what pins that down.
+    const file = await fixture("rotated-exif.jpg");
+    expect(hasExif(new Uint8Array(await file.arrayBuffer())), "fixture has no EXIF").toBe(true);
+
+    for (const strip of [true, false]) {
+      const out = await convert(file, "jpeg", "jpeg", { stripMetadata: strip }, () => {});
+      expect(
+        hasExif(new Uint8Array(await out.blob.arrayBuffer())),
+        `stripMetadata: ${strip} left EXIF in the output`,
+      ).toBe(false);
+    }
+  }, 60_000);
 });

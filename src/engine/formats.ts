@@ -115,7 +115,9 @@ export const FORMATS: Record<FormatId, FormatSpec> = {
     lossy: true,
   },
   gif: {
-    // Static only for now — animation needs frame handling the image path doesn't do.
+    // Written only from VIDEO, via ffmpeg — see targetsFor. Reading a GIF still
+    // yields its first frame; turning a clip INTO an animated GIF is the thing
+    // people actually ask for, and it is a genuinely different operation.
     id: "gif",
     label: "GIF",
     kind: "image",
@@ -123,8 +125,8 @@ export const FORMATS: Record<FormatId, FormatSpec> = {
     extensions: ["gif"],
     mime: "image/gif",
     decodable: true,
-    encodable: false,
-    lossy: false,
+    encodable: true,
+    lossy: true, // palette quantisation to 256 colours is a real loss
   },
   bmp: {
     id: "bmp",
@@ -403,17 +405,23 @@ export function targetsFor(source: FormatId): FormatSpec[] {
     if (!f.encodable) return false;
     switch (kind) {
       case "image":
-        // Images become other images, or get bound into a PDF.
-        return f.kind === "image" || f.id === "pdf";
+        // Images become other images, or get bound into a PDF. NOT GIF: a
+        // single-frame GIF from a PNG is worse in every way than the PNG, and
+        // producing it would download the 9.7 MB engine to do it.
+        return (f.kind === "image" && f.id !== "gif") || f.id === "pdf";
       case "document":
-        // A PDF renders to images, or passes through.
-        return f.kind === "image" || f.id === "pdf";
+        // A PDF renders to images, or passes through. Not GIF, for the same
+        // reason as above — and the pdf engine cannot write one anyway, so
+        // offering it would put a pair in the format table that no engine
+        // performs. That is the exact dishonesty this project exists to avoid.
+        return (f.kind === "image" && f.id !== "gif") || f.id === "pdf";
       case "audio":
         return f.kind === "audio";
       case "video":
-        // Video to video, plus audio extraction — "get the MP3 out of this" is
-        // one of the most-wanted conversions there is.
-        return f.kind === "video" || f.kind === "audio";
+        // Video to video, audio extraction ("get the MP3 out of this"), and
+        // animated GIF — the shareable-loop case, and the only route by which
+        // GIF is ever written.
+        return f.kind === "video" || f.kind === "audio" || f.id === "gif";
     }
   });
 }
@@ -490,3 +498,23 @@ export function renameTo(originalName: string, target: FormatId): string {
   const stem = dot > 0 ? originalName.slice(0, dot) : originalName;
   return `${stem}.${FORMATS[target].ext}`;
 }
+
+/**
+ * How many conversions between DIFFERENT formats the engines offer.
+ *
+ * Lives here rather than in each page because two pages once disagreed: the
+ * homepage counted same-format re-encodes (jpg → jpg, a real operation — change
+ * the quality, drop the EXIF) and /formats did not, so the site advertised 164
+ * conversions in one place and 148 in another. On a project whose whole claim is
+ * that its numbers are generated rather than marketed, two different generated
+ * numbers is the worst outcome available.
+ */
+export const CONVERSION_COUNT = Object.values(FORMATS).reduce(
+  (n, f) => n + targetsFor(f.id).filter((t) => t.id !== f.id).length,
+  0,
+);
+
+/** Formats that can also be re-encoded to themselves. Reported separately. */
+export const SELF_CONVERSION_COUNT = Object.values(FORMATS).filter((f) =>
+  targetsFor(f.id).some((t) => t.id === f.id),
+).length;

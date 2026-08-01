@@ -311,6 +311,29 @@ const VIDEO_ARGS: Partial<Record<FormatId, string[]>> = {
   webm: ["-c:v", "libvpx-vp9", "-deadline", "realtime", "-cpu-used", "5"],
 };
 
+/**
+ * Animated GIF settings, by quality preset.
+ *
+ * GIF has no bitrate control — size is governed by frame rate, dimensions and
+ * a 256-colour palette, so those are what a preset can actually move. The
+ * numbers are chosen to keep a short clip in the low megabytes: at 480px and
+ * 12 fps a two-second clip lands around 1 MB, while the same clip at source
+ * resolution and 30 fps is closer to 15 MB and useless for sharing.
+ */
+const GIF_PRESETS: Record<"smallest" | "balanced" | "best", { fps: number; width: number }> = {
+  smallest: { fps: 10, width: 360 },
+  balanced: { fps: 12, width: 480 },
+  best: { fps: 15, width: 640 },
+};
+
+/** Map the shared 1-100 quality dial onto the three GIF profiles. */
+function gifProfile(quality: number | undefined) {
+  if (quality === undefined) return GIF_PRESETS.balanced;
+  if (quality <= 60) return GIF_PRESETS.smallest;
+  if (quality >= 95) return GIF_PRESETS.best;
+  return GIF_PRESETS.balanced;
+}
+
 const AV_KINDS = new Set(["audio", "video"]);
 
 function buildArgs(
@@ -332,6 +355,32 @@ function buildArgs(
 
   const targetKind = FORMATS[target].kind;
   const extracting = isAudioExtraction(source, target);
+
+  if (target === "gif") {
+    const { fps, width } = gifProfile(options.quality);
+    const w = options.maxDimension ? Math.min(options.maxDimension, width) : width;
+
+    // One pass, using split so the palette is generated and applied in the same
+    // graph. The two-pass form writes a palette PNG to disk between runs, which
+    // means a second exec and a second chance for the wasm filesystem to be the
+    // problem.
+    //
+    // Without palettegen, ffmpeg falls back to a fixed 216-colour web palette
+    // and the result bands horribly on anything with a gradient — which is most
+    // video. stats_mode=diff weights the palette toward what actually changes
+    // between frames rather than the static background.
+    args.push("-an"); // no audio track in a GIF, and ffmpeg will not mux one
+    args.push(
+      "-vf",
+      `fps=${fps},scale=${w}:-1:flags=lanczos,split[a][b];` +
+        `[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=3`,
+    );
+    args.push("-loop", "0"); // loop forever, which is the entire point of a GIF
+    args.push("-f", "gif");
+    if (options.stripMetadata !== false) args.push("-map_metadata", "-1");
+    args.push(output);
+    return args;
+  }
 
   if (targetKind === "audio" || extracting) {
     args.push("-vn"); // drop video, including any embedded cover art
@@ -377,6 +426,9 @@ export const ffmpegEngine: Engine = {
     const from = FORMATS[source].kind;
     const to = FORMATS[target].kind;
     if (!AV_KINDS.has(from)) return false;
+    // Video to animated GIF crosses kinds — GIF is registered as an image —
+    // so it needs naming explicitly or the same-kind rule below rejects it.
+    if (from === "video" && target === "gif") return true;
     return from === to || isAudioExtraction(source, target);
   },
 

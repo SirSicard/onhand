@@ -50,7 +50,21 @@ async function decodeNatively(buffer: ArrayBuffer, mime: string): Promise<ImageD
   }
 }
 
-async function decodeHeic(buffer: ArrayBuffer): Promise<ImageData> {
+let libheifReady: Promise<{ HeifDecoder: new () => LibheifDecoder }> | null = null;
+
+interface LibheifDecoder {
+  decode(bytes: Uint8Array): LibheifImage[] | undefined;
+}
+interface LibheifImage {
+  get_width(): number;
+  get_height(): number;
+  display(
+    target: { data: Uint8ClampedArray; width: number; height: number },
+    cb: (r: unknown) => void,
+  ): void;
+}
+
+async function loadLibheif() {
   // Chromium and Firefox cannot decode HEIC at all (Safari can), so libheif is
   // the only path for the format most people arrive here to escape.
   //
@@ -59,8 +73,18 @@ async function decodeHeic(buffer: ArrayBuffer): Promise<ImageData> {
   // magnificently unhelpful `ReferenceError: module is not defined`.
   // libheif-bundle.mjs embeds its own wasm, so there is no separate binary to
   // locate — worth the ~2 MB given it is loaded only for HEIC jobs.
-  const factory = (await import("libheif-js/libheif-wasm/libheif-bundle.mjs")).default;
-  const libheif = await factory();
+  //
+  // Memoised so `warm` and a real decode share one instantiation rather than
+  // paying the ~2 MB compile twice.
+  libheifReady ??= (async () => {
+    const factory = (await import("libheif-js/libheif-wasm/libheif-bundle.mjs")).default;
+    return (await factory()) as { HeifDecoder: new () => LibheifDecoder };
+  })();
+  return libheifReady;
+}
+
+async function decodeHeic(buffer: ArrayBuffer): Promise<ImageData> {
+  const libheif = await loadLibheif();
 
   const decoder = new libheif.HeifDecoder();
   const images = decoder.decode(new Uint8Array(buffer));
@@ -187,6 +211,45 @@ async function resize(image: ImageData, maxDimension: number): Promise<ImageData
   return resizeFn(image, { width, height });
 }
 
+/**
+ * Composite onto white, for targets that have no alpha channel.
+ *
+ * JPEG cannot store transparency, and mozjpeg does not fail on an RGBA buffer —
+ * it silently ignores the alpha byte and encodes whatever RGB happens to sit
+ * underneath. For a transparent pixel that is (0,0,0), so a logo with a
+ * transparent background came out of here on a BLACK background. Verified, not
+ * theorised: a fully transparent pixel measured (0,0,0) in the output JPEG.
+ *
+ * White is the convention every other tool uses — ImageMagick, Photoshop's
+ * "Save As JPEG", and every converter this project is competing with. Matching
+ * it is the difference between a usable file and one that looks broken.
+ *
+ * Returns the original buffer untouched when the image is fully opaque, which
+ * is the overwhelmingly common case (every photograph).
+ */
+function flattenOntoWhite(image: ImageData): ImageData {
+  const d = image.data;
+  let transparent = false;
+  for (let i = 3; i < d.length; i += 4) {
+    if (d[i]! < 255) {
+      transparent = true;
+      break;
+    }
+  }
+  if (!transparent) return image;
+
+  const out = new Uint8ClampedArray(d.length);
+  for (let i = 0; i < d.length; i += 4) {
+    const a = d[i + 3]! / 255;
+    const inv = 255 * (1 - a);
+    out[i] = d[i]! * a + inv;
+    out[i + 1] = d[i + 1]! * a + inv;
+    out[i + 2] = d[i + 2]! * a + inv;
+    out[i + 3] = 255;
+  }
+  return new ImageData(out, image.width, image.height);
+}
+
 async function encode(
   image: ImageData,
   target: FormatId,
@@ -196,7 +259,7 @@ async function encode(
   switch (target) {
     case "jpeg": {
       const { encode: enc } = await import("@jsquash/jpeg");
-      return enc(image, { quality });
+      return enc(flattenOntoWhite(image), { quality });
     }
     case "webp": {
       const { encode: enc } = await import("@jsquash/webp");
@@ -225,7 +288,49 @@ async function encode(
   }
 }
 
+/**
+ * Fetch and instantiate the codecs a pair needs, without converting anything.
+ *
+ * The point is latency, not tidiness. A HEIC job pays for a 1.5 MB module and a
+ * wasm compile before a single pixel moves; doing that while the person is
+ * still looking at the queue makes the Convert click feel instant instead of
+ * costing two seconds on a laptop and rather more on a phone.
+ *
+ * The encoder is warmed by genuinely encoding a 1×1 image rather than merely
+ * importing the module. Importing fetches the JS; only running it compiles and
+ * instantiates the wasm, which is the expensive half. A 1×1 encode costs
+ * microseconds and exercises exactly the path the real job will take.
+ */
+async function warmPair(source: FormatId, target: FormatId): Promise<void> {
+  // Decoders: a native decode downloads nothing, so there is nothing to warm.
+  if (source === "heic") await loadLibheif();
+  else if (source === "svg") await loadResvg();
+  else if (source === "tiff") await import("utif");
+  else if (!NATIVE_DECODABLE.has(source)) await JSQUASH_DECODERS[source]?.();
+
+  await encode(new ImageData(1, 1), target, { quality: 80 });
+}
+
+const warmed = new Set<string>();
+
 const api = {
+  /**
+   * Pre-load the codecs for a pair. Idempotent, and never throws: this is an
+   * optimisation, and a failure here must not become a visible error when the
+   * real conversion would have reported it properly a moment later.
+   */
+  async warm(source: FormatId, target: FormatId): Promise<void> {
+    const key = `${source}>${target}`;
+    if (warmed.has(key)) return;
+    warmed.add(key);
+    try {
+      await warmPair(source, target);
+    } catch {
+      // Let the real job produce the real error message.
+      warmed.delete(key);
+    }
+  },
+
   /**
    * Convert one image. Returns a transferable ArrayBuffer.
    *

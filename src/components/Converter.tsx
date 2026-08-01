@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { convert } from "@/engine/broker";
+import { convert, prewarm } from "@/engine/broker";
 import { maxConcurrency, probeCapabilities } from "@/engine/capabilities";
 import { FORMATS, detectFormat, targetsFor, type FormatId } from "@/engine/formats";
 import { ConversionError, newJobId, type ConvertOptions, type Job } from "@/engine/types";
@@ -39,7 +39,10 @@ function commonTargets(jobs: Job[]): FormatId[] {
   return [...sets[0]!].filter((id) => sets.every((s) => s.has(id)));
 }
 
-export default function Converter({ initialTarget }: { initialTarget?: FormatId } = {}) {
+export default function Converter({
+  initialTarget,
+  initialSource,
+}: { initialTarget?: FormatId; initialSource?: FormatId } = {}) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [preset, setPreset] = useState<PresetKey>("balanced");
   const [advanced, setAdvanced] = useState(false);
@@ -58,6 +61,44 @@ export default function Converter({ initialTarget }: { initialTarget?: FormatId 
   const [offline, setOffline] = useState<OfflineStatus | null>(null);
 
   useEffect(() => onEngineLoad(setEngineLoad), []);
+
+  /**
+   * Load the codecs for whatever is queued, while the person is still choosing
+   * targets and presets. By the time they click Convert the wasm is compiled,
+   * so the work starts on the next frame instead of after a download.
+   *
+   * Runs off the queue rather than inside addFiles because warming is a side
+   * effect, and side effects inside a setState updater run twice under React's
+   * StrictMode. The worker de-duplicates, so re-running this is free.
+   */
+  useEffect(() => {
+    for (const job of jobs) {
+      if (job.status === "queued") void prewarm(job.source, job.target);
+    }
+  }, [jobs]);
+
+  /**
+   * On a pair page, warm before any file exists at all.
+   *
+   * Someone who searched "heic to jpg" and landed here has already told us what
+   * they want; fetching the decoder during the seconds they spend finding the
+   * file is the single biggest latency win available. Deliberately skipped when
+   * the browser reports Data Saver or a 2G-class connection — speculative
+   * megabytes are a real cost to somebody, and this is a guess, however good.
+   */
+  useEffect(() => {
+    if (!initialSource || !initialTarget) return;
+    const conn = (
+      navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }
+    ).connection;
+    if (conn?.saveData) return;
+    if (conn?.effectiveType && /^(slow-)?2g$/.test(conn.effectiveType)) return;
+
+    // After first paint, so the warm competes with nothing the user can see.
+    const idle = window.requestIdleCallback ?? ((cb: () => void) => setTimeout(cb, 1500));
+    const handle = idle(() => void prewarm(initialSource, initialTarget));
+    return () => window.cancelIdleCallback?.(handle as number);
+  }, [initialSource, initialTarget]);
 
   /**
    * The trust surface. Counts bytes this page SENDS — see uploadMonitor for why
@@ -557,8 +598,18 @@ export default function Converter({ initialTarget }: { initialTarget?: FormatId 
                   />
                   Strip metadata
                 </label>
+                {/*
+                  Says what it actually does, rather than implying it governs
+                  everything. Images are decoded to pixels and re-encoded, so
+                  EXIF has nowhere to survive — unticking this cannot bring it
+                  back, and pretending otherwise would be a control that does
+                  nothing. It is genuinely a switch for audio and video, where
+                  ffmpeg is asked to drop the tags or keep them.
+                */}
                 <span className="text-xs text-glass-600 dark:text-glass-400">
-                  On by default. Photos carry the GPS coordinates of where they were taken.
+                  On by default — photos carry the GPS coordinates of where they were taken. Images
+                  always lose it either way, because converting rebuilds the pixels. The switch is
+                  for audio and video tags.
                 </span>
               </div>
             )}

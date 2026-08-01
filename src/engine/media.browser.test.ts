@@ -201,6 +201,67 @@ describe("video conversion", () => {
   }, 180_000);
 });
 
+describe("animated GIF", () => {
+  /** Count frames by scanning for GIF Graphic Control Extension blocks. */
+  function countFrames(bytes: Uint8Array): number {
+    let frames = 0;
+    for (let i = 0; i < bytes.length - 8; i++) {
+      // 21 F9 04 introduces a Graphic Control Extension, one per rendered frame.
+      if (bytes[i] === 0x21 && bytes[i + 1] === 0xf9 && bytes[i + 2] === 0x04) frames++;
+    }
+    return frames;
+  }
+
+  it("produces a GIF that actually moves", async () => {
+    // The failure this guards: a "GIF" containing one frame. It opens, it looks
+    // like an image, and it is silently not what was asked for — which is the
+    // exact shape of failure this project exists to avoid.
+    const result = await convert(await fixture("clip.mp4"), "mp4", "gif", {}, () => {});
+    const bytes = new Uint8Array(await result.blob.arrayBuffer());
+
+    expect(String.fromCharCode(...bytes.slice(0, 6))).toMatch(/^GIF8[79]a$/);
+    const frames = countFrames(bytes);
+    expect(
+      frames,
+      `only ${frames} frame(s) — that is a still image, not an animation`,
+    ).toBeGreaterThan(5);
+  }, 180_000);
+
+  it("loops forever rather than playing once", async () => {
+    // A GIF that stops after one pass is not what anyone means by "make it a
+    // GIF". The Netscape application extension carries the loop count.
+    const result = await convert(await fixture("clip.mp4"), "mp4", "gif", {}, () => {});
+    const bytes = new Uint8Array(await result.blob.arrayBuffer());
+
+    // Search the header region, not the first few hundred bytes: the Netscape
+    // application extension sits AFTER the global colour table, which for a
+    // 256-colour palette is 768 bytes on its own.
+    const header = Array.from(bytes.slice(0, 4096), (b) => String.fromCharCode(b)).join("");
+    const at = header.indexOf("NETSCAPE2.0");
+    expect(at, "no Netscape application extension — this GIF plays once").toBeGreaterThan(-1);
+
+    // The two bytes after "NETSCAPE2.0\x03\x01" are the loop count,
+    // little-endian. Zero means forever; anything else means it stops.
+    const loops = bytes[at + 14]! | (bytes[at + 15]! << 8);
+    expect(loops, `loop count is ${loops}, not infinite`).toBe(0);
+  }, 180_000);
+
+  it("gets smaller at lower quality, because fps and width are the only dials", async () => {
+    // GIF has no bitrate, so a preset can only move frame rate and dimensions.
+    // If these come back equal, the preset is not reaching the encoder.
+    const file = await fixture("clip.mp4");
+    const small = await convert(file, "mp4", "gif", { quality: 55 }, () => {});
+    const best = await convert(file, "mp4", "gif", { quality: 95 }, () => {});
+    expect(small.bytesOut).toBeLessThan(best.bytesOut);
+  }, 240_000);
+
+  it("carries no audio track, which a GIF cannot hold", async () => {
+    const result = await convert(await fixture("clip.mp4"), "mp4", "gif", {}, () => {});
+    expect(result.blob.type).toBe("image/gif");
+    expect(result.filename).toMatch(/\.gif$/);
+  }, 180_000);
+});
+
 describe("audio extraction", () => {
   for (const target of ["mp3", "m4a", "wav"] as FormatId[]) {
     it(`pulls ${target} out of a video`, async () => {

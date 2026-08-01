@@ -46,6 +46,18 @@ export async function convertImageBuffer(
 }
 
 /**
+ * Warm the codecs for a pair in the shared worker.
+ *
+ * Fire-and-forget: the returned promise settles when the codecs are ready, but
+ * nothing waits on it. If a real conversion starts first it simply queues behind
+ * the warm on the same worker, which is the correct ordering anyway — both need
+ * the same module, and Comlink serialises them.
+ */
+export async function prewarmImages(source: FormatId, target: FormatId): Promise<void> {
+  await host.call((api) => api.warm(source, target));
+}
+
+/**
  * An absolute ceiling on a single image conversion.
  *
  * Unlike video, an image job has no intermediate progress to watch — the codecs

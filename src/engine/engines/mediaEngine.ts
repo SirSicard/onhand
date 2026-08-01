@@ -74,6 +74,9 @@ export const mediaEngine: Engine = {
     const from = FORMATS[source].kind;
     const to = FORMATS[target].kind;
     if (!AV_KINDS.has(from)) return false;
+    // Animated GIF is an ffmpeg job: WebCodecs has no GIF encoder, and the
+    // palette generation this needs is a filter graph, not a codec.
+    if (target === "gif") return false;
     // Same-kind conversions, plus pulling the audio out of a video. Video from
     // audio is not a thing, and image frames out of video belong to P3.
     return from === to || isAudioExtraction(source, target);

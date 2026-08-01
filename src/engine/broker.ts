@@ -1,6 +1,6 @@
 import { probeCapabilities } from "./capabilities";
 import { FORMATS, renameTo, type FormatId } from "./formats";
-import { imageEngine } from "./engines/imageEngine";
+import { imageEngine, prewarmImages } from "./engines/imageEngine";
 import { pdfEngine } from "./engines/pdfEngine";
 import { mediaEngine } from "./engines/mediaEngine";
 import { ffmpegEngine } from "./engines/ffmpegEngine";
@@ -37,6 +37,26 @@ export async function enginesFor(source: FormatId, target: FormatId): Promise<En
 
 export async function canConvert(source: FormatId, target: FormatId): Promise<boolean> {
   return (await enginesFor(source, target)).length > 0;
+}
+
+/**
+ * Load the codecs a pair will need, ahead of the click that needs them.
+ *
+ * Image engine only, and that restriction is the whole design. ffmpeg's core is
+ * 9.7 MB; fetching that on the chance someone might convert a video would
+ * quietly spend most of a phone's data allowance on a page they may bounce off.
+ * The image codecs are 200 KB–1.5 MB and are what the overwhelming majority of
+ * visits actually use.
+ *
+ * Never throws and never blocks anything — call it and forget it.
+ */
+export async function prewarm(source: FormatId, target: FormatId): Promise<void> {
+  try {
+    if (!imageEngine.canHandle(source, target, await probeCapabilities())) return;
+    await prewarmImages(source, target);
+  } catch {
+    // Purely an optimisation. The real conversion reports real errors.
+  }
 }
 
 export async function convert(
