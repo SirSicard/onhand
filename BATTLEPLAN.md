@@ -743,3 +743,34 @@ In practice it is unreachable: Chrome, Firefox and Safari all encode Opus
 natively, so ffmpeg is never asked.
 
 **180/180 on WebKit.**
+
+## Design, deeper — 2026-08-01
+
+The first pass was scoped as serviceable and fixed real bugs. This one is about
+the page reading as designed rather than assembled.
+
+- **A named type scale in `@theme`**, with tracking that tightens as size grows.
+  Sizes are now chosen from a set instead of picked per element; `.text-display`
+  and `.text-heading` carry the two places a heading should feel deliberate.
+- **The toolbar is one surface.** It was four unrelated boxes floating on the
+  page. The presets became a segmented control on an inset track rather than
+  four bordered buttons pretending to be one thing.
+- **The queue is a card** with hover states, and the size delta — the actual
+  payoff — is a pill: copper when bytes were saved, neutral when they were not.
+  All three variants measured before shipping: **4.71**, 5.19 and 4.80 against
+  their backgrounds.
+- **Tabular numerals** on every size readout, so figures stop jittering as they
+  update.
+- **Motion at 150 ms, eased-out**, honouring `prefers-reduced-motion`. Anything
+  longer on a list reads as lag rather than polish.
+- Real chevron and header rule on the capability panel instead of the browser's
+  default triangle.
+
+**Lighthouse 95–100 / 100 / 100 / 100** across the homepage, a pair page,
+`/formats` and `/why`. 180 browser tests per browser, 67 in node.
+
+Worth stating plainly: this is coherent, not an identity. Consistent scale,
+spacing, elevation and motion applied to a palette inherited from the P0
+scaffold. A designer would bring a typeface with a point of view, a mark that
+is not a repurposed favicon, and colour chosen rather than reasoned into
+compliance. What this removes is everything that read as unfinished.

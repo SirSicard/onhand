@@ -447,9 +447,9 @@ export default function Converter({ initialTarget }: { initialTarget?: FormatId 
 
       {jobs.length > 0 && (
         <>
-          <div className="mt-6 flex flex-wrap items-center gap-3">
+          <div className="mt-6 flex flex-wrap items-center gap-3 rounded-2xl border border-glass-200 bg-glass-100 p-3 dark:border-glass-800 dark:bg-glass-900">
             <div
-              className="flex gap-1 rounded-lg border border-glass-200 p-1 dark:border-glass-800"
+              className="flex gap-0.5 rounded-xl bg-glass-200 p-1 dark:bg-glass-800"
               role="group"
               aria-label="Quality preset"
             >
@@ -458,10 +458,10 @@ export default function Converter({ initialTarget }: { initialTarget?: FormatId 
                   key={key}
                   onClick={() => setPreset(key)}
                   aria-pressed={preset === key}
-                  className={`rounded-md px-3 py-1 text-sm transition-colors motion-reduce:transition-none ${
+                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors duration-150 ease-[var(--ease-out-quart)] motion-reduce:transition-none ${
                     preset === key
-                      ? "bg-copper-600 text-white"
-                      : "text-glass-600 hover:text-copper-500 dark:text-glass-400"
+                      ? "bg-copper-600 text-white shadow-sm"
+                      : "text-glass-600 hover:bg-glass-100 hover:text-glass-900 dark:text-glass-400 dark:hover:bg-glass-900 dark:hover:text-glass-100"
                   }`}
                 >
                   {PRESETS[key].label}
@@ -478,7 +478,7 @@ export default function Converter({ initialTarget }: { initialTarget?: FormatId 
                     if (e.target.value) convertAllTo(e.target.value as FormatId);
                     e.target.value = "";
                   }}
-                  className="rounded border border-glass-200 bg-transparent px-2 py-1 dark:border-glass-800"
+                  className="rounded-lg border border-glass-200 bg-glass-50 px-2.5 py-1.5 text-sm dark:border-glass-800 dark:bg-glass-950"
                 >
                   <option value="">Convert all to…</option>
                   {shared.map((id) => (
@@ -493,7 +493,7 @@ export default function Converter({ initialTarget }: { initialTarget?: FormatId 
             <button
               onClick={() => void runAll()}
               disabled={!pending}
-              className="rounded-lg bg-copper-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+              className="rounded-lg bg-copper-600 px-4 py-2 text-sm font-medium text-white transition-colors duration-150 ease-[var(--ease-out-quart)] hover:bg-copper-700 disabled:opacity-40 disabled:hover:bg-copper-600 motion-reduce:transition-none"
             >
               Convert {jobs.filter((j) => j.status === "queued").length || ""}
             </button>
@@ -502,7 +502,7 @@ export default function Converter({ initialTarget }: { initialTarget?: FormatId 
               <button
                 onClick={() => void downloadAll()}
                 disabled={zipping !== null}
-                className="rounded-lg border border-glass-200 px-4 py-2 text-sm disabled:opacity-40 dark:border-glass-800"
+                className="rounded-lg border border-glass-200 bg-glass-50 px-4 py-2 text-sm font-medium transition-colors duration-150 ease-[var(--ease-out-quart)] hover:border-copper-400 disabled:opacity-40 motion-reduce:transition-none dark:border-glass-800 dark:bg-glass-950"
               >
                 {zipping
                   ? `Zipping ${zipping.done}/${zipping.total}…`
@@ -588,7 +588,7 @@ export default function Converter({ initialTarget }: { initialTarget?: FormatId 
             </div>
           )}
 
-          <ul className="mt-4 divide-y divide-glass-200 dark:divide-glass-800">
+          <ul className="mt-4 divide-y divide-glass-200 overflow-hidden rounded-2xl border border-glass-200 dark:divide-glass-800 dark:border-glass-800">
             {jobs.map((job) => (
               <JobRow
                 key={job.id}
@@ -660,7 +660,7 @@ function JobRow({
         ))}
       </select>
 
-      <span className="w-56 text-right text-glass-600 dark:text-glass-400">
+      <span className="w-56 text-right tabular-nums text-glass-600 dark:text-glass-400">
         {job.status === "queued" && (
           <>
             {humanSize(job.file.size)}
@@ -679,10 +679,18 @@ function JobRow({
         {job.status === "cancelled" && "Cancelled"}
         {job.status === "done" && job.result && (
           <>
-            {humanSize(job.result.bytesIn)} → {humanSize(job.result.bytesOut)}{" "}
-            <span className={delta > 0 ? "text-copper-700 dark:text-copper-400" : ""}>
-              ({delta > 0 ? "−" : "+"}
-              {Math.abs(Math.round(delta * 100))}%)
+            <span className="tabular-nums">
+              {humanSize(job.result.bytesIn)} → {humanSize(job.result.bytesOut)}
+            </span>{" "}
+            <span
+              className={`rounded-md px-1.5 py-0.5 text-xs font-medium tabular-nums ${
+                delta > 0
+                  ? "bg-copper-600 text-white"
+                  : "bg-glass-200 text-glass-600 dark:bg-glass-800 dark:text-glass-400"
+              }`}
+            >
+              {delta > 0 ? "−" : "+"}
+              {Math.abs(Math.round(delta * 100))}%
             </span>
           </>
         )}
@@ -694,7 +702,7 @@ function JobRow({
       {job.status === "done" && job.result && (
         <button
           onClick={() => void saveBlob(job.result!.blob, job.result!.filename)}
-          className="rounded bg-copper-600 px-3 py-1 text-white"
+          className="rounded-lg bg-copper-600 px-3 py-1.5 text-sm font-medium text-white transition-colors duration-150 ease-[var(--ease-out-quart)] hover:bg-copper-700 motion-reduce:transition-none"
         >
           Save
         </button>

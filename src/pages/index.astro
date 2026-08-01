@@ -21,7 +21,7 @@ const counts = {
 >
   <main class="mx-auto flex min-h-dvh max-w-3xl flex-col gap-10 px-6 py-16">
     <header class="text-center">
-      <h1 class="text-4xl font-semibold tracking-tight sm:text-5xl">Onhand</h1>
+      <h1 class="text-display">Onhand</h1>
       <p class="mt-4 text-lg text-glass-600 dark:text-glass-400">
         Every file converter on one page.<br />
         Nothing is ever uploaded — <em>including video</em>.
@@ -50,7 +50,9 @@ const counts = {
     <Converter client:load />
 
     <section>
-      <h2 class="text-center text-sm font-semibold text-glass-600 dark:text-glass-400">
+      <h2
+        class="text-center text-xs font-semibold tracking-[0.08em] text-glass-600 uppercase dark:text-glass-400"
+      >
         Common conversions
       </h2>
       <ul class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -59,7 +61,7 @@ const counts = {
             <li>
               <a
                 href={`/${slugFor(pair)}/`}
-                class="block rounded-lg border border-glass-200 px-3 py-2 text-center text-sm transition-colors hover:border-copper-400 hover:text-copper-700 motion-reduce:transition-none dark:border-glass-800 dark:hover:text-copper-400"
+                class="block rounded-xl border border-glass-200 bg-glass-100 px-3 py-2.5 text-center text-sm font-medium transition-colors duration-150 ease-[var(--ease-out-quart)] hover:border-copper-400 hover:text-copper-700 motion-reduce:transition-none dark:border-glass-800 dark:bg-glass-900 dark:hover:text-copper-400"
               >
                 {titleFor(pair)}
               </a>
@@ -74,11 +76,30 @@ const counts = {
       </p>
     </section>
 
-    <details class="rounded-xl border border-glass-200 p-4 dark:border-glass-800">
-      <summary class="cursor-pointer text-sm font-semibold text-glass-600 dark:text-glass-400">
+    <details
+      class="group rounded-2xl border border-glass-200 bg-glass-100 px-4 py-3 dark:border-glass-800 dark:bg-glass-900"
+    >
+      <summary
+        class="flex cursor-pointer list-none items-center gap-2 text-sm font-medium text-glass-600 transition-colors hover:text-glass-900 motion-reduce:transition-none dark:text-glass-400 dark:hover:text-glass-100"
+      >
+        <svg
+          viewBox="0 0 12 12"
+          aria-hidden="true"
+          class="h-3 w-3 transition-transform duration-200 ease-[var(--ease-out-quart)] group-open:rotate-90 motion-reduce:transition-none"
+        >
+          <path
+            d="M4 2l4 4-4 4"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            stroke-linecap="round"
+            stroke-linejoin="round"></path>
+        </svg>
         What this browser can do
       </summary>
-      <div class="mt-4"><EnvironmentReport client:visible /></div>
+      <div class="mt-4 border-t border-glass-200 pt-4 dark:border-glass-800">
+        <EnvironmentReport client:visible />
+      </div>
     </details>
 
     <footer class="text-center text-sm text-glass-600 dark:text-glass-400">
