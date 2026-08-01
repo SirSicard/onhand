@@ -611,3 +611,32 @@ its 404 page and HTTP 200, so the script polls and asserts content types rather
 than status codes.
 
 **540 browser tests across Chromium, Firefox and WebKit. All green.**
+
+### The ffmpeg OOM cascade — 2026-08-01
+
+Eight consecutive WebKit failures on CI, each in about 70 ms. The real error,
+once the "too large" misclassification stopped hiding it:
+
+```
+RuntimeError: Out of bounds memory access (evaluating 'Module["_malloc"](len*SIZE_I32)')
+```
+
+**One genuine OOM, then seven jobs talking to a dead instance.** The reset that
+should have discarded the wedged engine only fired on `/abort/`, and that
+message does not contain the word — so every subsequent job failed instantly
+against a corrupted heap. Both judgements are now named functions
+(`looksLikeMemoryExhaustion`, `shouldDiscardInstance`) with tests that pin them
+against **the exact string emscripten produced**, not a paraphrase. An earlier
+attempt matched "memory access out of bounds" — the same words in the wrong
+order — which is precisely the kind of error a paraphrased test cannot catch.
+
+**Two contributing causes, both fixed:**
+
+- **mediabunny accepted work it could not do.** Only encodability was checked,
+  never decodability, so a pair whose source codec the browser cannot decode
+  reported `isValid`, failed partway through `execute()`, and was handed to
+  ffmpeg — putting load on the one engine that was running out of heap. It now
+  checks `canDecodeAudio`/`canDecodeVideo` first and declines cleanly.
+- **CI ran three wasm-heavy browsers on one 2-core runner.** The cross-browser
+  workflow is now a job matrix, one browser per runner. No extra wall-clock,
+  since they run concurrently, and no shared heap to exhaust.

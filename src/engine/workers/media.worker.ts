@@ -17,6 +17,8 @@ import {
   UnsupportedInputFormatError,
   WavOutputFormat,
   WebMOutputFormat,
+  canDecodeAudio,
+  canDecodeVideo,
   canEncodeAudio,
   canEncodeVideo,
   type AudioCodec,
@@ -139,9 +141,28 @@ const api = {
     const wantsVideo = Boolean(container.video) && !options.audioOnly;
     const videoTrack = await input.getPrimaryVideoTrack();
 
-    // Check encodability before building the conversion. mediabunny would also
-    // reject it, but checking here lets us name the missing codec, which is the
-    // difference between a useful log line and a mystery.
+    // DECODE first. Without this, mediabunny accepts a job it cannot actually
+    // perform — `isValid` is true, then `execute()` fails partway — and the
+    // broker hands it to ffmpeg, which on a loaded machine is where the wasm
+    // heap runs out. Declining up front keeps the work on the cheap path where
+    // the browser can do it and off ffmpeg entirely where it cannot.
+    const audioTrack = await input.getPrimaryAudioTrack();
+    if (audioTrack) {
+      const codec = audioTrack.codec;
+      if (codec && !(await canDecodeAudio(codec))) {
+        throw new NotMyJobError(`browser cannot decode ${codec}`);
+      }
+    }
+    if (wantsVideo && videoTrack) {
+      const codec = videoTrack.codec;
+      if (codec && !(await canDecodeVideo(codec))) {
+        throw new NotMyJobError(`browser cannot decode ${codec}`);
+      }
+    }
+
+    // Then encodability. mediabunny would also reject an impossible pair, but
+    // checking here lets us name the missing codec, which is the difference
+    // between a useful log line and a mystery.
     if (container.audio && !(await canEncodeAudio(container.audio))) {
       throw new NotMyJobError(`browser cannot encode ${container.audio}`);
     }

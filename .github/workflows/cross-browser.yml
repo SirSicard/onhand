@@ -31,6 +31,15 @@ jobs:
   matrix:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      # One browser per runner. Running all three on a single 2-core box ran
+      # ffmpeg's wasm heap out of memory — which surfaced as eight consecutive
+      # codec failures and cost a real debugging session before it turned out
+      # to be contention. Separate runners cost nothing extra in wall-clock,
+      # since they run concurrently.
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -42,8 +51,10 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
-      - name: Install browsers
-        run: pnpm exec playwright install --with-deps chromium firefox webkit
+      - name: Install browser
+        run: pnpm exec playwright install --with-deps ${{ matrix.browser }}
 
-      - name: Test (all browsers)
-        run: pnpm test:browser:all
+      - name: Test (${{ matrix.browser }})
+        run: pnpm test:browser
+        env:
+          ONHAND_BROWSER: ${{ matrix.browser }}

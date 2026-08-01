@@ -96,9 +96,15 @@ export default defineConfig({
       // release, because the codec differences between them are the entire
       // reason this suite exists — Chromium refuses SVG blobs, Firefox has no
       // AAC encoder, Safari decodes HEIC natively while the others cannot.
-      instances: process.env.ONHAND_ALL_BROWSERS
-        ? [{ browser: "chromium" }, { browser: "firefox" }, { browser: "webkit" }]
-        : [{ browser: "chromium" }],
+      // ONHAND_BROWSER picks exactly one. CI uses that with a job matrix so
+      // each browser gets a runner to itself: three wasm-heavy browsers sharing
+      // one 2-core box ran ffmpeg out of heap, and the OOM looked like a codec
+      // bug rather than the memory contention it was.
+      instances: process.env.ONHAND_BROWSER
+        ? [{ browser: process.env.ONHAND_BROWSER as "chromium" | "firefox" | "webkit" }]
+        : process.env.ONHAND_ALL_BROWSERS
+          ? [{ browser: "chromium" }, { browser: "firefox" }, { browser: "webkit" }]
+          : [{ browser: "chromium" }],
     },
   },
   resolve: {

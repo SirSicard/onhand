@@ -196,6 +196,34 @@ function announce(loading: boolean, progress: number | null) {
   announceEngineLoad({ loading, progress });
 }
 
+/**
+ * Does this message describe the wasm heap running out?
+ *
+ * Emscripten words it several ways and the exact phrasing matters. The one
+ * measured on CI was `Out of bounds memory access (evaluating
+ * 'Module["_malloc"](len*SIZE_I32)')` — note "out of bounds memory access",
+ * NOT "memory access out of bounds", which an earlier version looked for and
+ * therefore never matched.
+ */
+export function looksLikeMemoryExhaustion(message: string): boolean {
+  return /out of memory|\boom\b|allocation failed|out of bounds|cannot enlarge memory|memory access/i.test(
+    message,
+  );
+}
+
+/**
+ * Should the ffmpeg instance be thrown away after this error?
+ *
+ * Any wasm-level fault leaves the heap unusable, and the NEXT job then fails
+ * instantly against it. That cascade is what a run of eight consecutive
+ * failures at ~70 ms each actually was: one real OOM followed by seven jobs
+ * talking to a dead instance. Reloading 9.7 MB for an ordinary bad-input
+ * failure would be its own bug, so this stays narrow.
+ */
+export function shouldDiscardInstance(message: string): boolean {
+  return looksLikeMemoryExhaustion(message) || /abort|RuntimeError|unreachable/i.test(message);
+}
+
 export function isFfmpegLoaded(): boolean {
   return instance !== null;
 }
@@ -441,9 +469,7 @@ export const ffmpegEngine: Engine = {
       // Two conditions now: the message has to name memory specifically, AND
       // the input has to be big enough for that to be plausible. Below the
       // threshold, whatever went wrong was not memory.
-      const namesMemory = /out of memory|oom|allocation failed|memory access out of bounds/i.test(
-        message,
-      );
+      const namesMemory = looksLikeMemoryExhaustion(message);
       const plausiblySized = file.size > 64 * 1024 * 1024;
 
       if (namesMemory && plausiblySized) {
@@ -460,10 +486,7 @@ export const ffmpegEngine: Engine = {
           },
         );
       }
-      // An abort leaves the wasm instance in an unknown state even when it was
-      // not memory, so discard it — but say what actually happened rather than
-      // inventing a cause.
-      if (/abort/i.test(message)) resetFfmpeg();
+      if (shouldDiscardInstance(message)) resetFfmpeg();
 
       throw new ConversionError(
         "internal",
