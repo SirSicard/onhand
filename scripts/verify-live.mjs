@@ -38,6 +38,13 @@ const CHECKS = [
   { path: "/heic-to-jpg/", type: /text\/html/, why: "a pair page" },
   { path: "/formats/", type: /text\/html/, why: "formats matrix" },
   { path: "/why/", type: /text\/html/, why: "manifesto" },
+  { path: "/tools/", type: /text\/html/, why: "tool index" },
+  { path: "/tools/remove-exif/", type: /text\/html/, why: "an intent page" },
+  // A long-tail pair page. The head of the ranking was always going to be
+  // fine; the risk introduced by growing to 148 pages is that the tail silently
+  // does not deploy, and nothing else would notice.
+  { path: "/opus-to-ogg/", type: /text\/html/, why: "a long-tail pair page" },
+  { path: "/mp4-to-gif/", type: /text\/html/, why: "video to animated GIF" },
 ];
 
 async function check(path) {

@@ -51,7 +51,20 @@ const ENCODE_ASSETS: Partial<Record<FormatId, string[]>> = {
  * is the 9.7 MB download. Anything else on those kinds uses WebCodecs and needs
  * nothing cached beyond the shell.
  */
-const NEEDS_FFMPEG: ReadonlySet<FormatId> = new Set(["mp3", "ogg"]);
+const NEEDS_FFMPEG: ReadonlySet<FormatId> = new Set([
+  // Capability-dependent: most browsers cannot encode these, some can, and the
+  // broker asks at runtime. Listed here because "most" is the case to be
+  // honest about.
+  "mp3",
+  "ogg",
+  // Unconditional, unlike the two above. There is no GIF encoder in WebCodecs
+  // anywhere, and the palette generation this needs is a filter graph rather
+  // than a codec — so mediaEngine declines it outright and it is always ffmpeg.
+  // Without this line the badge said "works offline" over a queued mp4 → gif
+  // job that would have gone looking for 9.7 MB, which is precisely the promise
+  // this badge exists to avoid making.
+  "gif",
+]);
 
 const FFMPEG_ASSETS = ["/ffmpeg/ffmpeg-core.js", "/ffmpeg/ffmpeg-core.wasm.gz"];
 

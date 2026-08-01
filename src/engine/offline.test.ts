@@ -85,3 +85,17 @@ describe("the mapping matches what the engine really loads", () => {
     expect(assetsForPair("svg", "png")).toContain("index_bg");
   });
 });
+
+describe("pairs that always need the 9.7 MB engine", () => {
+  it("never claims a video-to-GIF job needs nothing extra", () => {
+    // The badge's entire purpose is not promising airplane mode for a pair
+    // whose codec has not been downloaded. GIF is the strongest case: no
+    // browser has a GIF encoder, so it is ALWAYS ffmpeg, and this reported
+    // "works offline" on a fresh visit until it was caught on the live site.
+    for (const source of ["mp4", "mov", "webm", "mkv", "avi"] as const) {
+      expect(assetsForPair(source, "gif"), `${source} → gif claims to need no assets`).toContain(
+        "/ffmpeg/ffmpeg-core.wasm.gz",
+      );
+    }
+  });
+});
