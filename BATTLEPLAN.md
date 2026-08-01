@@ -160,3 +160,14 @@ us nothing and lies to no one.
   ffmpeg.wasm on hardware that could encode natively. `capabilities.ts` now walks
   a ladder per codec and returns the exact working codec string; the encoder must
   be configured with that string, never a reconstructed guess. Locked by test.
+- 2026-08-01: Renamed **Alembic → Onhand**. Alembic is an existing CG interchange
+  file format (.abc) and the SQLAlchemy migration tool; naming a converter after a
+  format it doesn't convert is unwinnable in search. Alchemy register is mined out
+  (Athanor, Crucible, Retort, Kiln all taken).
+- 2026-08-01: `pnpm/action-setup@v4` refuses to run without a pinned version and
+  reads `packageManager` from package.json. Added `pnpm@11.9.0` there — it also
+  stops CI and the dev machine drifting apart.
+- 2026-08-01: P0 SHIPPED. https://onhand.pages.dev — production verified
+  `crossOriginIsolated: true`, SharedArrayBuffer available, **zero external
+  requests**, `_headers` applied by CF Pages, `_astro/*` immutable-cached. CI green
+  in 48s. GitHub repo is PRIVATE for now; flip to public when P1 renders something.
