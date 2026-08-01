@@ -92,7 +92,7 @@ const writable = Object.values(FORMATS).filter((f) => f.encodable).length;
                             <>
                               {i > 0 && <span aria-hidden="true"> · </span>}
                               {slug ? (
-                                <a href={`/${slug}`} class="hover:text-copper-500">
+                                <a href={`/${slug}/`} class="hover:text-copper-500">
                                   {t.label}
                                 </a>
                               ) : (
@@ -138,7 +138,7 @@ const writable = Object.values(FORMATS).filter((f) => f.encodable).length;
     <footer class="text-center text-sm text-glass-600 dark:text-glass-400">
       <p>
         <a href="/" class="hover:text-copper-500">Convert something</a> ·
-        <a href="/why" class="hover:text-copper-500">Why this exists</a> ·
+        <a href="/why/" class="hover:text-copper-500">Why this exists</a> ·
         <a href="https://github.com/SirSicard/onhand" class="hover:text-copper-500">Source</a>
       </p>
     </footer>

@@ -552,3 +552,19 @@ at all until someone shares the link.
 **Deployed output: 153 files, 30 MB** — against Cloudflare's limits of 20,000
 files and 25 MiB per file, with the largest single file being the 9.7 MiB
 gzipped ffmpeg core.
+
+### P5 errata — found by Lighthouse on the new pages
+
+- **`/why` scored 93 on accessibility: `link-in-text-block`.** Links inside
+  prose were distinguished from surrounding text by colour alone. `hover:underline`
+  is not enough — the distinction has to exist before you hover, and for anyone
+  who cannot hover at all. In-prose links are now underlined by default; nav and
+  footer links are not, because the rule only applies to links surrounded by text.
+- **Every sitemap URL was a 308 redirect.** Astro emits directory routes, so each
+  page's canonical is `/formats/`, while the sitemap and internal links said
+  `/formats`. A wasted crawl hop on all 47 URLs, and each page advertising an
+  address that disagreed with its own canonical. Now verified equal as sets:
+  **47 sitemap URLs, 47 canonicals, no difference either way.**
+
+**Lighthouse across all four page types** (home, pair, formats, why):
+perf 96–100, accessibility 100, best-practices 100, SEO 100.

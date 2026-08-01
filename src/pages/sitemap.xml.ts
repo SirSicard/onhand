@@ -9,12 +9,14 @@ import { PAIRS, slugFor } from "@/lib/pairs";
 export const GET: APIRoute = ({ site }) => {
   const origin = (site ?? new URL("https://onhand.pages.dev")).origin;
 
+  // Trailing slashes throughout, matching what Astro emits and what each page
+  // declares as its canonical. Without them every entry is a 308 hop.
   const urls = [
     { loc: "/", priority: "1.0", changefreq: "weekly" },
-    { loc: "/formats", priority: "0.8", changefreq: "monthly" },
-    { loc: "/why", priority: "0.7", changefreq: "monthly" },
+    { loc: "/formats/", priority: "0.8", changefreq: "monthly" },
+    { loc: "/why/", priority: "0.7", changefreq: "monthly" },
     ...PAIRS.map((pair) => ({
-      loc: `/${slugFor(pair)}`,
+      loc: `/${slugFor(pair)}/`,
       // Ranked pairs get ranked priority, tapering from 0.9 down to 0.4. A
       // sitemap where everything is 1.0 conveys nothing.
       priority: Math.max(0.4, 0.9 - (pair.rank - 1) * 0.012).toFixed(2),
