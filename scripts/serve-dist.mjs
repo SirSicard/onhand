@@ -30,6 +30,9 @@ const TYPES = {
   ".css": "text/css; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".wasm": "application/wasm",
+  // Served as an opaque body, NOT with Content-Encoding: gzip — the client
+  // decompresses it itself. See ffmpegEngine for why it is stored compressed.
+  ".gz": "application/gzip",
   ".svg": "image/svg+xml",
   ".png": "image/png",
   ".jpg": "image/jpeg",

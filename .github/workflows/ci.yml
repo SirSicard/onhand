@@ -33,15 +33,16 @@ jobs:
       - name: Test (node)
         run: pnpm test
 
-      - name: Install browsers
-        run: pnpm exec playwright install --with-deps chromium firefox webkit
+      - name: Install browser
+        run: pnpm exec playwright install --with-deps chromium
 
-      # The conversion matrix needs real wasm codecs, so it needs real browsers.
-      # All three, because the differences between them are the entire point:
-      # Chromium refuses SVG blobs to createImageBitmap, neither Chromium nor
-      # Firefox decodes HEIC, and codec profile support varies per engine.
-      - name: Test (browsers)
-        run: pnpm test:browser:all
+      # The conversion matrix needs real wasm codecs, so it needs a real
+      # browser. Chromium only on every push: all three takes ~10 minutes on a
+      # 2-core runner, and CI that slow stops getting read. The cross-browser
+      # run is a separate scheduled job — see cross-browser.yml — because the
+      # differences between engines are real but they do not change per commit.
+      - name: Test (chromium)
+        run: pnpm test:browser
 
       - name: Build
         run: pnpm build
@@ -58,25 +59,31 @@ jobs:
             || { echo "::error::COEP header missing from dist/_headers"; exit 1; }
           echo "cross-origin isolation headers present"
 
-      # The ffmpeg core is NOT committed — it is 32 MB, copied out of
-      # node_modules by the prebuild step. If a build command ever bypasses
-      # that hook (running `astro build` directly instead of `pnpm build`), the
-      # site deploys looking perfectly healthy and every audio job fails on a
-      # 404 for a file nobody notices is missing. Assert it landed.
-      - name: Assert the ffmpeg core shipped
+      # The ffmpeg core is NOT committed — prebuild copies it out of
+      # node_modules and gzips it. Two things go wrong silently here:
+      #   1. A build command that bypasses the prebuild hook deploys a site
+      #      that looks healthy and 404s on every audio job.
+      #   2. Cloudflare Pages rejects ANY file over 25 MiB. The raw core is
+      #      30.7 MiB, so an uncompressed copy fails the whole upload — which
+      #      is a line in a deploy log, not a test failure.
+      - name: Assert the ffmpeg core shipped and can be deployed
         run: |
           test -f dist/ffmpeg/ffmpeg-core.js \
             || { echo "::error::dist/ffmpeg/ffmpeg-core.js missing — did prebuild run?"; exit 1; }
-          test -f dist/ffmpeg/ffmpeg-core.wasm \
-            || { echo "::error::dist/ffmpeg/ffmpeg-core.wasm missing — did prebuild run?"; exit 1; }
-          size=$(wc -c < dist/ffmpeg/ffmpeg-core.wasm)
-          test "$size" -gt 20000000 \
-            || { echo "::error::ffmpeg-core.wasm is only $size bytes — truncated copy"; exit 1; }
+          test -f dist/ffmpeg/ffmpeg-core.wasm.gz \
+            || { echo "::error::dist/ffmpeg/ffmpeg-core.wasm.gz missing — did prebuild run?"; exit 1; }
           # The ESM build is the only one that works: @ffmpeg/ffmpeg always
           # creates a module worker, so it always loads the core with import().
           grep -q "export default" dist/ffmpeg/ffmpeg-core.js \
             || { echo "::error::ffmpeg-core.js is not the ESM build — import() will fail"; exit 1; }
-          echo "ffmpeg core present: $size bytes, ESM"
+          # Nothing in the deployed output may exceed Cloudflare's per-file cap.
+          big=$(find dist -type f -size +25M)
+          if [ -n "$big" ]; then
+            echo "::error::files over Cloudflare Pages' 25 MiB limit:"; echo "$big"
+            find dist -type f -size +25M -exec ls -la {} \;
+            exit 1
+          fi
+          echo "ffmpeg core present ($(wc -c < dist/ffmpeg/ffmpeg-core.wasm.gz) bytes gz), nothing over 25 MiB"
 
       # Prime directive 1: file bytes never leave the device. The strongest cheap
       # guard is that the built output contains no outbound endpoints at all.

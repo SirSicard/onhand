@@ -1,0 +1,49 @@
+name: Cross-browser
+
+# The full matrix across Chromium, Firefox and WebKit. Split out of CI because
+# it takes roughly ten minutes on a 2-core runner, and a per-push check that
+# slow is one people learn to ignore.
+#
+# The engine differences it covers are real — Firefox has no AAC encoder so
+# mov→mp4 falls through to ffmpeg there, Chromium refuses SVG blobs to
+# createImageBitmap, only Safari decodes HEIC natively — but they change with
+# browser releases, not with our commits. Nightly is the right cadence, and it
+# catches a browser update breaking us before a user does.
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+  push:
+    # Also on any change to the engines themselves, where a cross-browser
+    # regression is actually plausible.
+    branches: [main]
+    paths:
+      - "src/engine/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Install browsers
+        run: pnpm exec playwright install --with-deps chromium firefox webkit
+
+      - name: Test (all browsers)
+        run: pnpm test:browser:all

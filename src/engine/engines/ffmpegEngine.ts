@@ -1,5 +1,4 @@
 import { FFmpeg } from "@ffmpeg/ffmpeg";
-import { toBlobURL } from "@ffmpeg/util";
 import { announceEngineLoad } from "../engineLoad";
 import { FORMATS, isAudioExtraction, type FormatId } from "../formats";
 import { ConversionError, type ConvertOptions, type Engine, type ProgressUpdate } from "../types";
@@ -18,7 +17,14 @@ import { ConversionError, type ConvertOptions, type Engine, type ProgressUpdate 
  */
 
 const CORE_URL = "/ffmpeg/ffmpeg-core.js";
-const WASM_URL = "/ffmpeg/ffmpeg-core.wasm";
+/**
+ * Gzipped, and that is not an optimisation.
+ *
+ * The raw core is 30.7 MiB and Cloudflare Pages refuses any file over 25 MiB —
+ * so the uncompressed file cannot be deployed at all. Compressed it is 9.7 MiB,
+ * which also happens to be what the user actually downloads.
+ */
+const WASM_URL = "/ffmpeg/ffmpeg-core.wasm.gz";
 
 /**
  * Fetch the core and hand ffmpeg blob: URLs rather than paths.
@@ -35,15 +41,129 @@ const WASM_URL = "/ffmpeg/ffmpeg-core.wasm";
  */
 let blobUrls: Promise<{ coreURL: string; wasmURL: string }> | null = null;
 
+/** Every wasm module starts with these four bytes. */
+const WASM_MAGIC = [0x00, 0x61, 0x73, 0x6d];
+
+/**
+ * Verify a downloaded asset is what it claims to be, before it reaches ffmpeg.
+ *
+ * This is not paranoia. Cloudflare Pages answers a request for a missing asset
+ * with the 404 page and **HTTP 200** — measured against production, where
+ * `/ffmpeg/ffmpeg-core.wasm` returned `200 text/html`, 7,305 bytes of markup.
+ * A missing file is therefore indistinguishable from a present one at the HTTP
+ * level, and `toBlobURL` will happily wrap that markup in a blob labelled
+ * application/wasm. ffmpeg then fails deep inside instantiation with a message
+ * about magic bytes that reads like a corrupt build.
+ *
+ * Checking here converts a confusing failure into an accurate one.
+ */
+function assertIsWasm(buffer: ArrayBuffer): void {
+  const head = new Uint8Array(buffer, 0, Math.min(4, buffer.byteLength));
+  if (head.length < 4 || !WASM_MAGIC.every((b, i) => head[i] === b)) {
+    const text = new TextDecoder().decode(buffer.slice(0, 64));
+    throw new Error(
+      /<!doctype|<html/i.test(text)
+        ? "the server returned a web page instead of the engine — it is not deployed"
+        : `the engine file is not valid wasm (${buffer.byteLength} bytes)`,
+    );
+  }
+}
+
+/**
+ * Download with progress.
+ *
+ * Hand-rolled rather than using @ffmpeg/util's `downloadWithProgress`, which
+ * breaks on exactly the response we serve: when `Content-Encoding: gzip` is
+ * present, `Content-Length` is the wire size while the stream yields the
+ * larger decompressed body. Its progress loop throws on the mismatch and its
+ * fallback then calls `arrayBuffer()` on a body its own reader already
+ * consumed — so the real error becomes "body stream already read", which points
+ * nowhere near the cause.
+ *
+ * Fifteen lines we control, on the critical path, beats a dependency that fails
+ * this way.
+ */
+async function downloadWithProgress(
+  url: string,
+  onProgress: (received: number, total: number | null) => void,
+): Promise<ArrayBuffer> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`engine returned ${response.status}`);
+  if (!response.body) return response.arrayBuffer();
+
+  // Only trustworthy when the body is not encoded — otherwise it describes the
+  // compressed size while we are counting decompressed bytes.
+  const declared = Number(response.headers.get("content-length"));
+  let total: number | null =
+    response.headers.get("content-encoding") || !Number.isFinite(declared) || declared <= 0
+      ? null
+      : declared;
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.byteLength;
+    // If we somehow overshoot, the header was lying — fall back to
+    // indeterminate rather than showing a bar stuck at 100%.
+    if (total !== null && received > total) total = null;
+    onProgress(received, total);
+  }
+
+  const out = new Uint8Array(received);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return out.buffer;
+}
+
+/** gzip's own magic bytes. */
+const GZIP_MAGIC = [0x1f, 0x8b];
+
+/**
+ * Decompress the core, unless the server already did.
+ *
+ * Detected rather than assumed. A server that sends `Content-Encoding: gzip`
+ * for a `.gz` file makes the browser decompress it transparently, and we would
+ * then be handed a wasm module and try to gunzip it. Sniffing two bytes covers
+ * both behaviours and does not care which server we are on — which matters,
+ * because dev, the local static server, and Cloudflare need not agree.
+ */
+async function gunzipIfNeeded(buffer: ArrayBuffer): Promise<ArrayBuffer> {
+  const head = new Uint8Array(buffer, 0, Math.min(2, buffer.byteLength));
+  if (head.length < 2 || !GZIP_MAGIC.every((b, i) => head[i] === b)) return buffer;
+
+  const stream = new Blob([buffer]).stream().pipeThrough(new DecompressionStream("gzip"));
+  return new Response(stream).arrayBuffer();
+}
+
 function coreBlobUrls() {
   blobUrls ??= (async () => {
-    // The .js is small; only the 32 MB wasm is worth reporting on. Its progress
-    // is real — read from Content-Length — so the number shown is a measurement
+    const coreResponse = await fetch(CORE_URL);
+    if (!coreResponse.ok) throw new Error(`engine script returned ${coreResponse.status}`);
+    const coreText = await coreResponse.text();
+    if (/^\s*<!doctype|^\s*<html/i.test(coreText)) {
+      throw new Error("the server returned a web page instead of the engine script");
+    }
+    const coreURL = URL.createObjectURL(new Blob([coreText], { type: "text/javascript" }));
+
+    // Only the core wasm is worth reporting progress on, and that progress is
+    // real — read from Content-Length — so the number shown is a measurement
     // rather than an animation, which is the whole point of showing one.
-    const coreURL = await toBlobURL(CORE_URL, "text/javascript");
-    const wasmURL = await toBlobURL(WASM_URL, "application/wasm", true, ({ received, total }) => {
-      announce(true, total > 0 ? Math.min(received / total, 1) : null);
+    const downloaded = await downloadWithProgress(WASM_URL, (received, total) => {
+      announce(true, total === null ? null : Math.min(received / total, 1));
     });
+
+    const wasmBuffer = await gunzipIfNeeded(downloaded);
+    assertIsWasm(wasmBuffer);
+    const wasmURL = URL.createObjectURL(new Blob([wasmBuffer], { type: "application/wasm" }));
+
     return { coreURL, wasmURL };
   })().catch((err) => {
     blobUrls = null; // a failed fetch must not be cached as the answer
@@ -110,7 +230,9 @@ async function load(): Promise<FFmpeg> {
       announce(false, null);
       loading = null;
       throw new ConversionError("internal", "The conversion engine failed to load.", {
-        suggestion: "Check your connection and try again — it's a one-time download.",
+        suggestion: cause instanceof Error && /not deployed|web page/i.test(cause.message)
+          ? "The engine file is missing from the server. This is our bug, not yours."
+          : "Check your connection and try again — it's a one-time download.",
         cause,
       });
     }

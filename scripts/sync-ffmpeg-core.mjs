@@ -15,7 +15,10 @@
  * static copy of public/ follows neither symlinks nor pnpm's store layout.
  */
 
+import { createReadStream, createWriteStream } from "node:fs";
 import { copyFile, mkdir, stat } from "node:fs/promises";
+import { pipeline } from "node:stream/promises";
+import { createGzip } from "node:zlib";
 import { createRequire } from "node:module";
 import { basename, dirname, join, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -42,18 +45,54 @@ const FILES = [require.resolve("@ffmpeg/core"), require.resolve("@ffmpeg/core/wa
 
 await mkdir(dest, { recursive: true });
 
+/**
+ * Cloudflare Pages refuses any single file over 25 MiB, and the core wasm is
+ * 30.7 MiB — it cannot be served as a static asset at all. So it is stored
+ * gzipped (9.7 MiB) and decompressed in the browser with DecompressionStream,
+ * which all three engines support.
+ *
+ * This applies in development too, deliberately. Shipping the raw file locally
+ * and the compressed one in production would mean the decompression path was
+ * never exercised until it was live.
+ */
+const MAX_ASSET_BYTES = 25 * 1024 * 1024;
+
 for (const from of FILES) {
   const name = basename(from);
-  const to = join(dest, name);
+  const src = await stat(from);
 
-  // Skip an unchanged copy — the wasm is 32 MB and this runs before every dev
-  // server start.
-  const [src, existing] = await Promise.all([stat(from), stat(to).catch(() => null)]);
+  if (name.endsWith(".wasm")) {
+    const to = join(dest, `${name}.gz`);
+    // Skip if the compressed copy is already newer than the source.
+    const existing = await stat(to).catch(() => null);
+    if (existing && existing.mtimeMs >= src.mtimeMs) {
+      console.log(`ffmpeg core: ${name}.gz up to date (${(existing.size / 1e6).toFixed(1)} MB)`);
+      continue;
+    }
+
+    await pipeline(createReadStream(from), createGzip({ level: 9 }), createWriteStream(to));
+    const out = await stat(to);
+    if (out.size > MAX_ASSET_BYTES) {
+      // Fail the build rather than fail the deploy. wrangler rejects the whole
+      // upload, and finding out then means the reason is a line in a deploy log.
+      throw new Error(
+        `${name}.gz is ${(out.size / 1024 ** 2).toFixed(1)} MiB, over the 25 MiB ` +
+          `Cloudflare Pages limit. It cannot be deployed.`,
+      );
+    }
+    console.log(
+      `ffmpeg core: gzipped ${name} → ${(src.size / 1e6).toFixed(1)} MB into ` +
+        `${(out.size / 1e6).toFixed(1)} MB`,
+    );
+    continue;
+  }
+
+  const to = join(dest, name);
+  const existing = await stat(to).catch(() => null);
   if (existing && existing.size === src.size) {
     console.log(`ffmpeg core: ${name} up to date (${(src.size / 1e6).toFixed(1)} MB)`);
     continue;
   }
-
   await copyFile(from, to);
   console.log(`ffmpeg core: copied ${name} (${(src.size / 1e6).toFixed(1)} MB)`);
 }

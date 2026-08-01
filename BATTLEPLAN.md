@@ -296,3 +296,41 @@ via ffmpeg** (no AAC encoder), all three producing correct output.
 cleanly in Firefox, asserted by engine telemetry. mkv→mp4, avi→mp4, video→mp3
 and the full audio matrix pass in all three browsers. Memory guardrail refuses
 oversized input in under 500ms rather than crashing the tab mid-encode.
+
+### P2 errata — the deploy, which was the real test
+
+Everything above was verified locally and in a local production build. Actually
+deploying found three more things, each of which would have shipped broken.
+
+- **Cloudflare Pages refuses any file over 25 MiB.** The ffmpeg core wasm is
+  30.7 MiB, so it could not be deployed at all — `wrangler` rejects the entire
+  upload, not just that file. It is now stored gzipped (9.7 MiB) and
+  decompressed in the browser with `DecompressionStream`, in development too, so
+  the decompression path is exercised on every run rather than first in
+  production. The build now fails if any file exceeds the limit.
+- **Cloudflare answers a missing asset with the 404 page and HTTP 200.**
+  Measured: `/ffmpeg/ffmpeg-core.wasm` returned `200 text/html`, 7,305 bytes of
+  markup. A missing file is indistinguishable from a present one at the HTTP
+  level, and wrapping that markup in a blob labelled `application/wasm` makes
+  ffmpeg fail deep inside instantiation with a magic-bytes error that reads like
+  a corrupt build. Both assets are now sniffed before use.
+- **The Pages project is Direct Upload — `Git Provider: No`.** Pushing to GitHub
+  deployed nothing, and nothing said so: the site stayed up serving an old
+  build, CI went green, and it sat three commits behind. Added
+  `.github/workflows/deploy.yml`, which also verifies the live URL afterwards
+  rather than trusting wrangler's exit code. **It needs `CLOUDFLARE_API_TOKEN`
+  and `CLOUDFLARE_ACCOUNT_ID` as repository secrets before it can run.**
+
+Also replaced `@ffmpeg/util`'s `downloadWithProgress`. It breaks on exactly the
+response we serve: with `Content-Encoding: gzip` the `Content-Length` is the
+wire size while the stream yields the larger decompressed body, its progress
+loop throws on the mismatch, and its fallback then calls `arrayBuffer()` on a
+body its own reader already consumed — surfacing as "body stream already read",
+which points nowhere near the cause.
+
+CI now runs Chromium on every push and the full three-browser matrix nightly
+(`cross-browser.yml`). All three on every push took ten minutes on a 2-core
+runner, and CI that slow stops being read.
+
+**Verified live at https://onhand.pages.dev:** `crossOriginIsolated: true`,
+WAV→MP3 86.2 KB → 25.1 KB through ffmpeg.wasm, `0 bytes uploaded`.

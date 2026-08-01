@@ -30,5 +30,9 @@ export function announceEngineLoad(state: EngineLoadState): void {
   for (const fn of listeners) fn(state);
 }
 
-/** Roughly what the user is about to download, for the one-time notice. */
-export const FFMPEG_DOWNLOAD_MB = 32;
+/**
+ * What the user actually downloads: the core is 30.7 MiB of wasm, shipped
+ * gzipped at ~10 MB because Cloudflare Pages refuses files over 25 MiB. The
+ * notice quotes the transfer size, since that is what they wait for.
+ */
+export const FFMPEG_DOWNLOAD_MB = 10;
