@@ -640,3 +640,28 @@ order — which is precisely the kind of error a paraphrased test cannot catch.
 - **CI ran three wasm-heavy browsers on one 2-core runner.** The cross-browser
   workflow is now a job matrix, one browser per runner. No extra wall-clock,
   since they run concurrently, and no shared heap to exhaust.
+
+### A pool makes hangs worse — 2026-08-01
+
+Adding the concurrency limit changed what a stuck job costs. Before, a job that
+never settled blocked only itself; with a pool it holds a slot, so everything
+queued behind it waits too. The mixed batch went from 10/10 to **8/10 after the
+"fix"**, which is the sort of regression that only shows up under load.
+
+The image engine had no protection at all — mediabunny got a stall detector and
+ffmpeg a load deadline, but image codecs are one-shot with no intermediate
+progress, so there is no silence to detect, only elapsed time. They now get an
+absolute 120 s ceiling, defensible because the memory guardrail already caps
+images near 90 MB and decode-plus-encode of that never approaches two minutes.
+
+**And the harness was manufacturing its own contention.** `test:browser:all` ran
+three browsers concurrently on one machine; WebKit **passed alone and failed in
+that run**. It is sequential now, matching CI's job matrix. Same root cause as
+the ffmpeg OOM one commit earlier — three wasm-heavy browsers on hardware sized
+for one.
+
+The pattern worth remembering: twice a CI-only failure looked environmental and
+twice it exposed a genuine defect underneath. Load does not create these bugs,
+it makes them reproducible.
+
+**180 tests per browser, all three green, sequentially.**

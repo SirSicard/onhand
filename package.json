@@ -18,7 +18,7 @@
     "test:watch": "vitest",
     "lint": "prettier --check .",
     "test:browser": "vitest run --config vitest.browser.config.ts",
-    "test:browser:all": "ONHAND_ALL_BROWSERS=1 vitest run --config vitest.browser.config.ts",
+    "test:browser:all": "ONHAND_BROWSER=chromium vitest run --config vitest.browser.config.ts && ONHAND_BROWSER=firefox vitest run --config vitest.browser.config.ts && ONHAND_BROWSER=webkit vitest run --config vitest.browser.config.ts",
     "test:all": "pnpm test && pnpm test:browser",
     "sync:ffmpeg": "node scripts/sync-ffmpeg-core.mjs",
     "predev": "node scripts/sync-ffmpeg-core.mjs",

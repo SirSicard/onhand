@@ -45,6 +45,32 @@ export async function convertImageBuffer(
   );
 }
 
+/**
+ * An absolute ceiling on a single image conversion.
+ *
+ * Unlike video, an image job has no intermediate progress to watch — the codecs
+ * are one-shot, so there is no silence to detect, only elapsed time. And unlike
+ * video, the work is genuinely bounded: the memory guardrail already refuses
+ * anything over ~90 MB, and decoding plus re-encoding that much never
+ * approaches two minutes on hardware from this decade.
+ *
+ * This matters more since the queue runs a fixed number of jobs at once. Before
+ * that, a job that never settled blocked only itself; now it holds a pool slot,
+ * so everything queued behind it waits too. Bounding it means one stuck file
+ * costs one failure rather than the rest of the batch.
+ */
+const IMAGE_DEADLINE_MS = 120_000;
+
+function withDeadline<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`image conversion exceeded ${ms / 1000}s`)), ms);
+    }),
+  ]).finally(() => clearTimeout(timer)) as Promise<T>;
+}
+
 const IMAGE_SOURCES: ReadonlySet<FormatId> = new Set([
   "jpeg",
   "png",
@@ -86,14 +112,17 @@ export const imageEngine: Engine = {
     const buffer = await file.arrayBuffer();
 
     try {
-      const out = await host.call((api) =>
-        api.convert(
-          Comlink.transfer(buffer, [buffer]),
-          source,
-          target,
-          file.type || FORMATS[source].mime,
-          options,
+      const out = await withDeadline(
+        host.call((api) =>
+          api.convert(
+            Comlink.transfer(buffer, [buffer]),
+            source,
+            target,
+            file.type || FORMATS[source].mime,
+            options,
+          ),
         ),
+        IMAGE_DEADLINE_MS,
       );
       onProgress({ progress: 1 });
       return { blob: new Blob([out], { type: FORMATS[target].mime }) };
@@ -112,6 +141,16 @@ export const imageEngine: Engine = {
       // is handled by the worker's own error handler in getWorker().
       const message = cause instanceof Error ? cause.message : String(cause);
 
+      if (/exceeded \d+s/.test(message)) {
+        throw new ConversionError(
+          "internal",
+          `Converting this ${FORMATS[source].label} took too long and was stopped.`,
+          {
+            suggestion: "Try it on its own, or reduce the dimensions first.",
+            cause,
+          },
+        );
+      }
       if (/no decoder|could not be rasterised|held no image/i.test(message)) {
         throw new ConversionError(
           "corrupt",
