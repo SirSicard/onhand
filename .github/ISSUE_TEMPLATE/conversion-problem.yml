@@ -1,0 +1,54 @@
+name: A conversion failed or came out wrong
+description: A file wouldn't convert, or the result isn't right
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please don't attach the file itself unless you're happy for it to be
+        public — issues are public. A description is nearly always enough.
+
+  - type: input
+    id: pair
+    attributes:
+      label: Which conversion?
+      description: Source format to target format.
+      placeholder: HEIC to JPEG
+    validations:
+      required: true
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      description: >
+        This matters more here than in most projects — the conversion path
+        genuinely differs between browsers. "Works for me" often just means
+        "my browser has an AAC encoder".
+      placeholder: Safari 18.2 on macOS 15
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+      placeholder: |
+        The row said "Converting…" and never finished.
+        The output opened but was blank / silent / sideways.
+    validations:
+      required: true
+
+  - type: textarea
+    id: file
+    attributes:
+      label: About the file
+      description: Size, and roughly what produced it. Container quirks are usually the cause.
+      placeholder: ~40 MB, straight off an iPhone 15, 4K 60fps
+
+  - type: textarea
+    id: console
+    attributes:
+      label: Console output
+      description: Errors here carry a human sentence and often name the real problem.
+      render: shell
