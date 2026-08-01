@@ -71,6 +71,25 @@ jobs:
       #   2. Cloudflare Pages rejects ANY file over 25 MiB. The raw core is
       #      30.7 MiB, so an uncompressed copy fails the whole upload — which
       #      is a line in a deploy log, not a test failure.
+      # postbuild generates the service worker. A build command that skips the
+      # hooks (astro build instead of pnpm build) produces a site with no
+      # offline support and no error to show for it.
+      - name: Assert the service worker shipped
+        run: |
+          test -f dist/sw.js \
+            || { echo "::error::dist/sw.js missing — did postbuild run?"; exit 1; }
+          grep -q "onhand-shell-" dist/sw.js \
+            || { echo "::error::dist/sw.js is not the generated worker"; exit 1; }
+          # It must never precache a codec: that would download ~10 MB on first
+          # visit from someone who only wanted to convert a PNG.
+          node -e "
+            const sw = require('fs').readFileSync('dist/sw.js','utf8');
+            const list = JSON.parse(sw.match(/const PRECACHE = (\[[\s\S]*?\]);/)[1]);
+            const heavy = list.filter(u => /\.(wasm|gz)\$/.test(u));
+            if (heavy.length) { console.error('::error::service worker precaches codecs: ' + heavy); process.exit(1); }
+            console.log('service worker precaches ' + list.length + ' shell files, no codecs');
+          "
+
       - name: Assert the ffmpeg core shipped and can be deployed
         run: |
           test -f dist/ffmpeg/ffmpeg-core.js \

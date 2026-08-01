@@ -1,0 +1,22 @@
+# Cloudflare Pages configuration, in the repo rather than only in the dashboard.
+#
+# The first git-triggered build deployed an EMPTY site — every path 404'd,
+# including `/` — because the output directory was not what Astro actually
+# writes. Nothing about that failure is visible from outside: the deployment
+# appears in the list, marked Production, with a URL that serves nothing. The
+# previous manual deploy stays live, so the site looks fine and simply stops
+# receiving changes.
+#
+# `pages_build_output_dir` fixes that here, where it is reviewable, instead of
+# in a settings page nobody looks at again.
+#
+# The build COMMAND still comes from the dashboard and must be `pnpm build` —
+# not `astro build`. The pre/post hooks around it are load-bearing:
+#   prebuild   copies and gzips the 32 MB ffmpeg core into public/
+#   postbuild  generates the service worker from the built output
+# Running `astro build` directly skips both, producing a site whose audio
+# conversions 404 and which has no offline support, with no error anywhere.
+
+name = "onhand"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-08-01"

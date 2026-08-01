@@ -415,6 +415,7 @@ specifically — and correctly reports that most audio and video work offline
 immediately, because WebCodecs uses codecs already in the browser.
 
 ### Found by building it
+
 - **The precache list stopped at what the HTML references**, but a module's
   static import graph goes deeper. Missing one dependency fails the whole module
   and is reported against the entry chunk — "Failed to fetch dynamically
@@ -430,9 +431,11 @@ immediately, because WebCodecs uses codecs already in the browser.
   src/href-only scrape produced a 20 KB "shell" that could not render.
 
 ### Colour contrast, and why one test was theatre
+
 Lighthouse: **performance 96, accessibility 100, best-practices 100, SEO 100.**
 
 Getting there found two real failures:
+
 - `glass-400` on the light background is **2.7:1**, needing 4.5:1. Dark mode was
   fine at 6.6:1, so light mode had been failing since P0.
 - White on `copper-500` is **3.25:1**. Buttons now use `copper-600` (4.71:1) and
