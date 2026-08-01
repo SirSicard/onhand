@@ -1,8 +1,16 @@
-# ALEMBIC — market + technology research
+# ONHAND — market + technology research
 
 **2026-08-01 · researched by Fable, all claims from live searches, sources at bottom.**
-Working name ALEMBIC (the alchemist's still — pairs with Inkwell's craft naming). Alternates:
-Transmute, Recast, Mill. Domain availability NOT checked — do that before naming anything.
+Name **ONHAND** — files converted on your own hardware, close at hand.
+
+> Naming history, so it isn't relitigated: the working name was **Alembic**, killed
+> 2026-08-01. Alembic is already an open computer-graphics interchange **file format**
+> (`.abc`, Sony Imageworks + ILM, in the Library of Congress format registry) *and* the
+> standard SQLAlchemy migration tool. Naming a file converter after an existing file
+> format it does not convert poisons every search worth winning. The alchemy register
+> generally is mined out — Athanor, Crucible, Retort and Kiln are all taken by existing
+> software. Domain availability could not be checked reliably by machine (RDAP
+> rate-limits, DNS gives parking false-positives) — verify at a registrar.
 
 ---
 

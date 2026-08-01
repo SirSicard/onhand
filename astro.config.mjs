@@ -8,7 +8,7 @@ import tailwindcss from "@tailwindcss/vite";
 // prime directive 1). If something here ever needs a server adapter, that is a bug in
 // the design, not a missing dependency.
 export default defineConfig({
-  site: "https://alembic.pages.dev",
+  site: "https://onhand.pages.dev",
   output: "static",
   integrations: [react()],
   vite: {

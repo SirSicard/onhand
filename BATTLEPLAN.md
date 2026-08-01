@@ -1,4 +1,4 @@
-# ALEMBIC — battle plan for Opus
+# ONHAND — battle plan for Opus
 
 **You are building a client-side file converter.** Read `RESEARCH.md` (market + tech facts)
 and `SPEC.md` (product) first — this file is the execution order. All three are canon; when
@@ -16,7 +16,7 @@ than silently diverging (same protocol as the showcase CANON — it worked).
 
 ## P0 — Rails (½ day)
 
-- [ ] Repo `alembic` under SirSicard, MIT LICENSE, README stub with the one-liner
+- [ ] Repo `onhand` under SirSicard, MIT LICENSE, README stub with the one-liner
 - [ ] Astro (static output) + React 19 islands + TS strict + Tailwind v4 (CSS-first — **no
       tailwind.config**, same as the showcase; @theme in CSS)
 - [ ] pnpm; Node 22; `.nvmrc`

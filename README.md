@@ -1,4 +1,4 @@
-# Alembic
+# Onhand
 
 **Every file converter on one page. Nothing is ever uploaded — including video.**
 
@@ -19,13 +19,13 @@ Convertio caps free files at 100 MB, Zamzar at 50 MB and two files a day.
 
 They aren't being greedy. Server conversion genuinely costs them money per file.
 
-Alembic doesn't have that cost, because there is no server. WebAssembly and WebCodecs run
+Onhand doesn't have that cost, because there is no server. WebAssembly and WebCodecs run
 the codecs in your tab, on your silicon. So "free" isn't a promotional tier that will be
 squeezed later — it's just what the thing costs.
 
 The nearest thing to this is [VERT.sh](https://vert.sh), which is open source, good, and
 worth your time. Its own tagline says "fully local\*" — the asterisk is video, which routes
-to a server. Alembic's bet is that [WebCodecs going near-baseline in 2026](https://caniuse.com/webcodecs)
+to a server. Onhand's bet is that [WebCodecs going near-baseline in 2026](https://caniuse.com/webcodecs)
 means that asterisk no longer has to exist.
 
 ## How you can check we mean it

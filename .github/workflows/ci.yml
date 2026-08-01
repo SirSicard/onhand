@@ -52,7 +52,7 @@ jobs:
       # guard is that the built output contains no outbound endpoints at all.
       - name: Assert no external network endpoints in build output
         run: |
-          if grep -rEIl "https?://(?!alembic\.pages\.dev)" dist --include="*.js" -P 2>/dev/null \
+          if grep -rEIl "https?://(?!onhand\.pages\.dev)" dist --include="*.js" -P 2>/dev/null \
              | grep -q .; then
             echo "::warning::external URL found in build output — verify it is not an upload path"
             grep -rEIho "https?://[a-zA-Z0-9._/-]*" dist --include="*.js" -P | sort -u | head -20
