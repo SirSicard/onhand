@@ -2,6 +2,17 @@
 import Base from "../layouts/Base.astro";
 import Converter from "../components/Converter";
 import EnvironmentReport from "../components/EnvironmentReport";
+import { PAIRS, slugFor, titleFor } from "../lib/pairs";
+import { FORMATS, targetsFor } from "../engine/formats";
+
+// The most-wanted conversions, in the order pairs.ts ranks them. Generated
+// rather than written out, so this cannot advertise a pair that does not exist.
+const popular = PAIRS.slice(0, 12);
+
+const counts = {
+  formats: Object.keys(FORMATS).length,
+  pairs: Object.values(FORMATS).reduce((n, f) => n + targetsFor(f.id).length, 0),
+};
 ---
 
 <Base
@@ -37,6 +48,31 @@ import EnvironmentReport from "../components/EnvironmentReport";
     </p>
 
     <Converter client:load />
+
+    <section>
+      <h2 class="text-center text-sm font-semibold text-glass-600 dark:text-glass-400">
+        Common conversions
+      </h2>
+      <ul class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {
+          popular.map((pair) => (
+            <li>
+              <a
+                href={`/${slugFor(pair)}/`}
+                class="block rounded-lg border border-glass-200 px-3 py-2 text-center text-sm transition-colors hover:border-copper-400 hover:text-copper-700 motion-reduce:transition-none dark:border-glass-800 dark:hover:text-copper-400"
+              >
+                {titleFor(pair)}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+      <p class="mt-4 text-center text-sm text-glass-600 dark:text-glass-400">
+        <a href="/formats/" class="underline underline-offset-2 hover:text-copper-500">
+          All {counts.formats} formats and {counts.pairs} conversions
+        </a>
+      </p>
+    </section>
 
     <details class="rounded-xl border border-glass-200 p-4 dark:border-glass-800">
       <summary class="cursor-pointer text-sm font-semibold text-glass-600 dark:text-glass-400">

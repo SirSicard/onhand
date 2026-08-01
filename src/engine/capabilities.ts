@@ -215,13 +215,28 @@ export function __resetCapabilitiesCache(): void {
 /**
  * How many jobs may run at once.
  *
- * Deliberately conservative: each ffmpeg.wasm instance can hold ~2 GB, so two
- * concurrent video jobs on an 8 GB machine is how you get an OOM that kills the
- * tab rather than the job.
+ * Split by the weight of the work, because one number for both was wrong in
+ * both directions. Media jobs hold an ffmpeg.wasm instance that can reach ~2 GB,
+ * so two at once on a small machine is how you get an OOM that kills the tab
+ * rather than the job. Image jobs are bounded near 90 MB by the memory
+ * guardrail and finish in milliseconds — throttling those to one at a time on
+ * a dual-core machine turned a 50-file batch into a two-minute wait, measured.
+ *
+ * The floor for images is 2 rather than 1 for that reason: even a constrained
+ * device converts small images faster in pairs than in single file, and the
+ * memory cost of doing so is negligible.
  */
-export function maxConcurrency(caps: Capabilities): number {
+export function maxConcurrency(caps: Capabilities, kind: "media" | "image" = "media"): number {
+  const cores = Math.max(1, caps.hardwareConcurrency);
+
+  if (kind === "image") {
+    // Bounded, short, cheap. Scale with the machine and keep a sane floor.
+    if (caps.memoryConstrainedPlatform) return 2;
+    return Math.max(2, Math.min(6, cores));
+  }
+
   if (caps.memoryConstrainedPlatform) return 1;
   const mem = caps.deviceMemoryGb;
   if (mem !== undefined && mem <= 4) return 1;
-  return Math.max(1, Math.min(3, Math.floor(caps.hardwareConcurrency / 2)));
+  return Math.max(1, Math.min(3, Math.floor(cores / 2)));
 }

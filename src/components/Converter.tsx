@@ -207,7 +207,14 @@ export default function Converter({ initialTarget }: { initialTarget?: FormatId 
     const queue = jobs.filter((j) => j.status === "queued" || j.status === "failed");
     if (queue.length === 0) return;
 
-    const limit = maxConcurrency(await probeCapabilities());
+    // A batch of images may run wider than a batch of video. If the queue
+    // mixes them, the heavier kind decides — one 2 GB ffmpeg job alongside six
+    // images is still one 2 GB ffmpeg job.
+    const anyMedia = queue.some((j) => {
+      const kind = FORMATS[j.source].kind;
+      return kind === "audio" || kind === "video";
+    });
+    const limit = maxConcurrency(await probeCapabilities(), anyMedia ? "media" : "image");
     let cursor = 0;
     await Promise.all(
       Array.from({ length: Math.min(limit, queue.length) }, async () => {
@@ -362,21 +369,56 @@ export default function Converter({ initialTarget }: { initialTarget?: FormatId 
           setDragging(true);
         }}
         onDragLeave={() => setDragging(false)}
-        className={`rounded-xl border-2 border-dashed transition-colors motion-reduce:transition-none ${
+        className={`rounded-2xl border-2 border-dashed transition-colors motion-reduce:transition-none ${
           dragging
-            ? "border-copper-500 bg-copper-500/5"
-            : "border-glass-200 hover:border-copper-400 dark:border-glass-800"
+            ? "border-copper-500 bg-glass-200 dark:bg-glass-800"
+            : "border-glass-200 bg-glass-100 hover:border-copper-400 dark:border-glass-800 dark:bg-glass-900"
         }`}
       >
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
-          className="flex w-full cursor-pointer flex-col items-center justify-center rounded-xl px-6 py-14"
+          className="flex w-full cursor-pointer flex-col items-center justify-center rounded-2xl px-6 py-10 sm:py-16"
         >
-          <span className="text-xl font-medium">Drop anything.</span>
-          <span className="mt-2 text-center text-sm text-glass-600 dark:text-glass-400">
-            Converted on your device. Nothing is uploaded —<br />
-            watch the network tab if you don't believe us.
+          {/* The mark, reused from the favicon: a hand cupping a file. */}
+          <svg
+            viewBox="0 0 32 32"
+            aria-hidden="true"
+            className={`mb-4 h-9 w-9 transition-colors motion-reduce:transition-none ${
+              dragging ? "text-copper-500" : "text-glass-400 dark:text-glass-600"
+            }`}
+          >
+            <rect
+              x="10"
+              y="2"
+              width="12"
+              height="13"
+              rx="1.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            />
+            <path
+              d="M13.5 6h5M13.5 9.5h5"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+            />
+            <path
+              d="M5 21a3 3 0 0 1 5-2.2l2 1.8V13a1.7 1.7 0 0 1 3.4 0v4.5a1.7 1.7 0 0 1 3.4 0v.8a1.7 1.7 0 0 1 3.4 0v.9a1.7 1.7 0 0 1 3.4 0V24a6 6 0 0 1-6 6h-4.3a6 6 0 0 1-4.6-2.2z"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+            />
+          </svg>
+          <span className="text-xl font-medium sm:text-2xl">
+            {dragging ? "Let go." : "Drop anything."}
+          </span>
+          <span className="mt-2 max-w-sm text-center text-sm text-glass-600 dark:text-glass-400">
+            Converted on your device. Nothing is uploaded — watch the network tab if you don't
+            believe us.
           </span>
         </button>
         <input
@@ -393,6 +435,15 @@ export default function Converter({ initialTarget }: { initialTarget?: FormatId 
           }}
         />
       </div>
+
+      {/*
+        Always visible, including the zero state. This is the product's whole
+        claim and it used to appear only once a file was queued — absent at
+        exactly the moment someone is deciding whether to believe the page.
+      */}
+      <p className="mt-3 text-center font-mono text-xs text-copper-700 dark:text-copper-400">
+        ↑ {uploadedBytes === 0 ? "0 bytes" : humanSize(uploadedBytes)} uploaded
+      </p>
 
       {jobs.length > 0 && (
         <>
@@ -459,20 +510,18 @@ export default function Converter({ initialTarget }: { initialTarget?: FormatId 
               </button>
             )}
 
-            <span className="ml-auto flex items-center gap-3 font-mono text-xs text-glass-600 dark:text-glass-400">
-              {offline?.pairAvailable && (
-                <span
-                  title={
-                    offline.needsNothingExtra
-                      ? "These formats use codecs already built into your browser."
-                      : "The codecs for these formats are cached on this device."
-                  }
-                >
-                  ✈ works offline
-                </span>
-              )}
-              <span>↑ {uploadedBytes === 0 ? "0 bytes" : humanSize(uploadedBytes)} uploaded</span>
-            </span>
+            {offline?.pairAvailable && (
+              <span
+                className="ml-auto font-mono text-xs text-glass-600 dark:text-glass-400"
+                title={
+                  offline.needsNothingExtra
+                    ? "These formats use codecs already built into your browser."
+                    : "The codecs for these formats are cached on this device."
+                }
+              >
+                ✈ works offline
+              </span>
+            )}
           </div>
 
           <div className="mt-2">
@@ -586,8 +635,14 @@ function JobRow({
   const losslessImpossible = preset === "lossless" && FORMATS[job.target].lossy;
 
   return (
-    <li className="flex flex-wrap items-center gap-3 py-3 text-sm">
-      <span className="min-w-0 flex-1 truncate" title={job.file.name}>
+    <li className="grid grid-cols-[1fr_auto] items-center gap-x-3 gap-y-2 py-3 text-sm sm:grid-cols-[1fr_auto_auto_auto_auto]">
+      {/*
+        Its own grid cell, spanning the full width on small screens. As one
+        flex line this truncated to a single character on a 375px viewport —
+        you could not tell which file was which, which is the one thing a
+        queue row has to do.
+      */}
+      <span className="col-span-2 min-w-0 truncate font-medium sm:col-span-1" title={job.file.name}>
         {job.file.name}
       </span>
 

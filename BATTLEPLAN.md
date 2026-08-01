@@ -665,3 +665,39 @@ twice it exposed a genuine defect underneath. Load does not create these bugs,
 it makes them reproducible.
 
 **180 tests per browser, all three green, sequentially.**
+
+## Design pass — 2026-08-01
+
+Serviceable, not a visual identity. That comes with a designer.
+
+**The one real bug it found: on a 375 px viewport the filename truncated to a
+single character.** The row was one flex line, so `flex-1` on the name got
+almost nothing once the select, size, Save and ✕ had taken their width. A queue
+row has exactly one job — telling you which file it is — and on mobile it did
+not do it. Now a grid that gives the name its own full-width cell on small
+screens and stays one line on desktop.
+
+**The counter moved into the zero state.** It is the strongest thing this
+product has to say and it only appeared once a file was queued — absent at
+precisely the moment someone is deciding whether to believe the page.
+
+Also: the mark from the favicon in the drop zone, copper on the counter so the
+accent exists before you interact, a "Common conversions" grid generated from
+the ranked pair list (which doubles as internal linking to all 44 pair pages),
+and a shorter drop zone on mobile where it was eating half the screen.
+
+### What the design pass broke, and what caught it
+
+- **A translucent drop-zone fill** (`bg-glass-100/40`) meant axe could not
+  resolve what the text sat on and reported contrast as _incomplete_. The suite
+  treats that as a failure on purpose — "could not determine" is not "fine" —
+  so it was caught immediately. Solid tints look the same and stay checkable.
+- **A copper drag fill measured 1.6:1 against light text in dark mode.** Caught
+  by computing it rather than looking at it. The copper border and icon carry
+  the accent; the fill is a neutral lift at 11.9:1.
+- **A decorative `·` separator** axe could not classify. Deleted rather than
+  filtered — it added nothing.
+- **Two tests found the counter by tag** and broke when it became a `<p>`. They
+  now find it by what it says.
+
+**Lighthouse after: 96 / 100 / 100 / 100** on both the homepage and a pair page.

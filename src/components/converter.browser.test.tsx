@@ -52,6 +52,19 @@ function addFiles(files: File[]) {
 }
 
 const rows = () => Array.from(container.querySelectorAll("li"));
+
+/**
+ * The upload counter, found by what it says rather than by tag.
+ *
+ * It moved from a <span> in the toolbar to a <p> under the drop zone during the
+ * design pass, which broke two tests that were otherwise still correct. Matching
+ * the leading arrow also avoids the drop-zone copy, which contains the word
+ * "uploaded" too.
+ */
+const uploadCounter = () =>
+  Array.from(container.querySelectorAll("p, span, div")).find((el) =>
+    /^↑ \d/.test(el.textContent?.trim() ?? ""),
+  );
 const buttonNamed = (re: RegExp) =>
   Array.from(container.querySelectorAll("button")).find((b) => re.test(b.textContent ?? ""));
 
@@ -119,7 +132,9 @@ describe("queue concurrency", () => {
     // finishing seven, because each job holds a wasm instance and they starve
     // one another.
     const { maxConcurrency, probeCapabilities } = await import("@/engine/capabilities");
-    const limit = maxConcurrency(await probeCapabilities());
+    // "image", matching what the app picks for a queue of PNGs. Asking for the
+    // media limit here compared against a number the app never used.
+    const limit = maxConcurrency(await probeCapabilities(), "image");
 
     render();
     addFiles(Array.from({ length: 8 }, (_, i) => pngFile(`c${i}.png`)));
@@ -153,11 +168,7 @@ describe("the upload counter", () => {
   it("reads zero, which is the entire promise", () => {
     render();
     addFiles([pngFile("a.png")]);
-    // Match the counter itself, not the drop-zone copy — which also contains
-    // the word "uploaded", and is the first span in the document.
-    const counter = Array.from(container.querySelectorAll("span")).find((s) =>
-      /^↑ /.test(s.textContent ?? ""),
-    );
+    const counter = uploadCounter();
     expect(counter?.textContent).toBe("↑ 0 bytes uploaded");
   });
 });
@@ -371,10 +382,8 @@ describe("AC-P3: a mixed batch, driven by keyboard alone", () => {
     expect(deltas.length, `only ${deltas.length}/10 finished`).toBe(10);
 
     // And nothing left the device.
-    const counter = Array.from(container.querySelectorAll("span")).find((s) =>
-      /^↑ /.test(s.textContent ?? ""),
-    );
-    expect(counter?.textContent).toBe("↑ 0 bytes uploaded");
+    const counter = uploadCounter();
+    expect(counter?.textContent?.trim()).toBe("↑ 0 bytes uploaded");
 
     // "Download all" appears and is reachable by keyboard.
     expect(tabTo(/Download all/).tagName).toBe("BUTTON");

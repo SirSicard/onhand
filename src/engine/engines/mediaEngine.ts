@@ -47,6 +47,22 @@ export function resetMediaWorker(): void {
  */
 const STALL_MS = 30_000;
 
+/**
+ * A stall window proportional to the work.
+ *
+ * A flat 30 s is absurd for a two-second audio clip: WebCodecs reports itself
+ * capable, produces nothing, and the queue waits half a minute before falling
+ * back — for a file ffmpeg converts in under a second. It is equally too SHORT
+ * for a 300 MB video, where a gap while demuxing is normal.
+ *
+ * Scaling by input size fixes both ends. The floor of five seconds is well
+ * clear of any real first-packet latency; the ceiling stays at thirty.
+ */
+function stallWindowFor(bytes: number): number {
+  const perMegabyte = 120; // ms
+  return Math.round(Math.min(STALL_MS, Math.max(5_000, (bytes / 1_048_576) * perMegabyte)));
+}
+
 const AV_KINDS = new Set(["audio", "video"]);
 
 export const mediaEngine: Engine = {
@@ -104,7 +120,7 @@ export const mediaEngine: Engine = {
 
       // Cancel the worker-side conversion on a stall so it stops holding
       // memory, then let the broker fall through to ffmpeg.
-      const guarded = withStallTimeout(conversion, STALL_MS, () => {
+      const guarded = withStallTimeout(conversion, stallWindowFor(file.size), () => {
         void host.call((api) => api.cancel(jobId));
       });
       watchdog = guarded;
