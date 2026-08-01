@@ -701,3 +701,45 @@ and a shorter drop zone on mobile where it was eating half the screen.
   now find it by what it says.
 
 **Lighthouse after: 96 / 100 / 100 / 100** on both the homepage and a pair page.
+
+## The last red test — 2026-08-01
+
+One failing test survived every fix: `tone.ogg → opus` on Playwright's Linux
+WebKit. Chasing it properly took three rounds and each round was worth it.
+
+**Round 1 — the diagnostic was wrong.** CI reported "Converting OGG to Opus
+failed." and nothing else. Surfacing `cause` gave `encoder : Lavc59.37.100
+libopus`, which is ffmpeg saying the encoder loaded _successfully_ — because the
+engine kept only the LAST log line, and ffmpeg's final output is always
+harmless metadata. Now a twenty-line ring, preferring lines that match
+error/invalid/unable/failed.
+
+**Round 2 — it was never WebKit.** With the real error visible
+(`RuntimeError: memory access out of bounds`, thrown as a string, so
+`err.message` was undefined) it reproduced in **Chromium, locally**. WebKit was
+simply the only browser without a WebCodecs Opus encoder, so the only one that
+ever reached the ffmpeg path.
+
+**Round 3 — isolate it.** A fresh ffmpeg instance per case:
+
+| case                | result                           |
+| ------------------- | -------------------------------- |
+| ogg (stereo) → opus | crash                            |
+| ogg `-ac 1` → opus  | fine, 19 KB                      |
+| stereo.wav → opus   | crash — different input entirely |
+| mp3 (mono) → opus   | fine, 18 KB                      |
+| ogg (stereo) → flac | fine, 97 KB                      |
+
+Not the container, not the source codec, not the fixture:
+**ffmpeg.wasm 5.1.4's libopus faults on any stereo input.**
+
+Forcing mono would turn the test green by silently discarding a channel — the
+exact quiet data loss `/why` says we refuse. So Onhand reports it, the README
+and THIRD_PARTY name it, and the test asserts **that specific message** rather
+than accepting any failure. A test that tolerates "it broke somehow" is not a
+test.
+
+In practice it is unreachable: Chrome, Firefox and Safari all encode Opus
+natively, so ffmpeg is never asked.
+
+**180/180 on WebKit.**

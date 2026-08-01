@@ -134,6 +134,12 @@ asterisk no longer has to exist.
   says so before it starts, with real byte progress.
 - **Firefox falls back to ffmpeg for anything needing AAC**, so `mov` → `mp4` is
   seconds there instead of milliseconds. Correct either way.
+- **Stereo Opus needs a browser with a WebCodecs Opus encoder** — which Chrome,
+  Firefox and Safari all have, so this affects almost nobody. The bundled
+  ffmpeg (5.1.4) has a defect where libopus faults on any stereo input;
+  measured, and not specific to a container or source codec. Forcing mono would
+  "work" by silently discarding a channel, so Onhand says what happened
+  instead.
 
 ## Development
 

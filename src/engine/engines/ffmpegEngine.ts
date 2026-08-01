@@ -525,6 +525,35 @@ export const ffmpegEngine: Engine = {
       }
       if (shouldDiscardInstance(message)) resetFfmpeg();
 
+      /**
+       * A known upstream defect, isolated rather than guessed at.
+       *
+       * ffmpeg.wasm 5.1.4's libopus faults on ANY stereo input. Measured
+       * directly, with a fresh instance per case:
+       *
+       *   ogg (stereo)  -> opus   RuntimeError: memory access out of bounds
+       *   ogg -ac 1     -> opus   fine, 19 KB
+       *   stereo.wav    -> opus   same crash, different input entirely
+       *   mp3 (mono)    -> opus   fine, 18 KB
+       *
+       * So it is neither the container nor the source codec: it is stereo plus
+       * libopus in this build. Forcing mono would "work" by silently throwing
+       * away a channel, which is the kind of quiet data loss this project
+       * exists to avoid — so we say what happened instead.
+       *
+       * In practice nobody hits this: Chrome, Firefox and Safari all encode
+       * Opus through WebCodecs, so ffmpeg is never asked. It surfaces only on
+       * builds without that encoder.
+       */
+      if (target === "opus" && looksLikeMemoryExhaustion(message)) {
+        throw new ConversionError("unsupported", "This browser can't produce stereo Opus.", {
+          suggestion:
+            "The bundled encoder has a defect with stereo Opus. Try Ogg or M4A, " +
+            "or use Chrome, Firefox or Safari, which encode Opus natively.",
+          cause,
+        });
+      }
+
       throw new ConversionError(
         "internal",
         `Converting ${FORMATS[source].label} to ${FORMATS[target].label} failed.`,

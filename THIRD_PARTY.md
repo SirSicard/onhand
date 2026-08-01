@@ -38,6 +38,18 @@ core instead. The cost is real and worth stating: **no H.264 encoding on the
 ffmpeg path, which is exactly the fallback Firefox uses for `mov` → `mp4`.**
 That trade has not been made.
 
+### A known defect in this build
+
+ffmpeg.wasm 5.1.4's **libopus faults on stereo input** — `RuntimeError: memory
+access out of bounds`. Isolated with a fresh instance per case: mono input
+encodes fine, stereo crashes regardless of container or source codec, and the
+same stereo audio converts to FLAC without complaint. It is libopus plus more
+than one channel in this build, nothing narrower.
+
+Onhand reports it rather than silently downmixing, and in practice it is
+unreachable: every browser worth naming encodes Opus through WebCodecs, so the
+ffmpeg path is never asked for it.
+
 ## libheif is LGPL
 
 |              |                                                                                                  |
