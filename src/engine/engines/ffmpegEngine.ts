@@ -401,9 +401,27 @@ export const ffmpegEngine: Engine = {
     const outName = `out.${FORMATS[target].ext}`;
 
     const onLog = ({ message }: { message: string }) => {
-      lastLog = message;
+      // A ring of the recent lines, not just the last one.
+      //
+      // Keeping only the most recent line looked reasonable and was useless:
+      // ffmpeg's final output is almost always harmless metadata, so a real
+      // failure reported `encoder : Lavc59.37.100 libopus` as its cause —
+      // which is ffmpeg saying the encoder loaded fine. The actual error is
+      // typically several lines earlier.
+      recentLog.push(message);
+      if (recentLog.length > 20) recentLog.shift();
     };
-    let lastLog = "";
+    const recentLog: string[] = [];
+
+    /** The lines most likely to explain a failure, newest last. */
+    const logTail = () => recentLog.slice(-12).join("\n");
+
+    /** ffmpeg marks real problems; surface those ahead of the noise. */
+    const logErrors = () =>
+      recentLog
+        .filter((l) => /error|invalid|unable|failed|not found|no such|denied/i.test(l))
+        .slice(-4)
+        .join("\n");
 
     const onFfmpegProgress = ({ progress }: { progress: number }) => {
       // ffmpeg's progress is derived from log parsing and is unreliable for
@@ -434,12 +452,31 @@ export const ffmpegEngine: Engine = {
           `This ${FORMATS[source].label} file could not be converted.`,
           {
             suggestion: "It may be damaged, or use a codec we can't read.",
-            cause: new Error(lastLog || `ffmpeg exited ${code}`),
+            cause: new Error(logErrors() || logTail() || `ffmpeg exited ${code}`),
           },
         );
       }
 
-      const data = await ff.readFile(outName);
+      // Named explicitly: when this throws, the generic catch below reports
+      // "Converting X to Y failed" with no indication that ffmpeg claimed
+      // success and then produced no file — which is a different bug from
+      // ffmpeg refusing the job, and needs saying so.
+      let data;
+      try {
+        data = await ff.readFile(outName);
+      } catch (readError) {
+        throw new ConversionError(
+          "internal",
+          `${FORMATS[source].label} to ${FORMATS[target].label} produced no output file.`,
+          {
+            suggestion: "This is a problem on our side rather than with your file.",
+            cause: new Error(
+              `ffmpeg exited 0 but ${outName} does not exist.\n${logErrors() || logTail()}`,
+              { cause: readError },
+            ),
+          },
+        );
+      }
       // readFile's return is typed as FileData (string | Uint8Array) and the
       // Uint8Array is over an ArrayBufferLike, which Blob won't take directly.
       const bytes: Uint8Array<ArrayBuffer> =
@@ -448,7 +485,7 @@ export const ffmpegEngine: Engine = {
           : new Uint8Array(data.slice().buffer as ArrayBuffer);
       if (bytes.byteLength === 0) {
         throw new ConversionError("internal", "The conversion produced an empty file.", {
-          cause: new Error(lastLog),
+          cause: new Error(logErrors() || logTail()),
         });
       }
 
@@ -492,10 +529,10 @@ export const ffmpegEngine: Engine = {
         "internal",
         `Converting ${FORMATS[source].label} to ${FORMATS[target].label} failed.`,
         {
-          suggestion: lastLog
+          suggestion: recentLog.length
             ? undefined
             : "This looks like a problem on our side rather than with your file.",
-          cause: new Error(lastLog || message),
+          cause: new Error(logErrors() || logTail() || message),
         },
       );
     } finally {
