@@ -48,17 +48,19 @@ promotional tier that gets squeezed later — it's just what the thing costs.
 
 ## What it does
 
-**23 formats, 159 conversions** — every one generated from a single capability
-table, so the site cannot advertise a pair the engines can't actually perform.
-Every competitor's format list is marketing copy and half the entries fail
-silently.
+**23 formats, 148 conversions, a page for every one of them** — all generated
+from a single capability table, so the site cannot advertise a pair the engines
+can't actually perform. Every competitor's format list is marketing copy and
+half the entries fail silently. There is a test that walks the whole matrix and
+asks the broker whether an engine really claims each pair; it caught `pdf → gif`
+being offered to users with nothing behind it.
 
-|            |                                                                            |
-| ---------- | -------------------------------------------------------------------------- |
-| **Images** | jpg png webp avif **heic** gif bmp tiff ico svg → jpg png webp avif        |
-| **Audio**  | mp3 wav m4a aac ogg opus flac → any of the same                            |
-| **Video**  | mp4 mov webm mkv avi → mp4 mov webm mkv, plus extract-audio to mp3/m4a/wav |
-| **PDF**    | images → pdf; pdf → one image per page, zipped                             |
+|            |                                                                         |
+| ---------- | ----------------------------------------------------------------------- |
+| **Images** | jpg png webp avif **heic** gif bmp tiff ico svg → jpg png webp avif     |
+| **Audio**  | mp3 wav m4a aac ogg opus flac → any of the same                         |
+| **Video**  | mp4 mov webm mkv avi → mp4 mov webm mkv, **animated gif**, or audio out |
+| **PDF**    | images → pdf; pdf → one image per page, zipped                          |
 
 Drop a folder and it converts the lot. Set every row to one format, or each
 individually, then download everything as a zip. After one visit it works
@@ -111,8 +113,11 @@ asterisk no longer has to exist.
 - **No fonts, scripts or images from anyone else.** The site sets
   `Cross-Origin-Embedder-Policy: require-corp`, which would block third-party
   resources even if we wanted them.
-- **Metadata is stripped by default.** Photos carry the GPS coordinates of where
-  they were taken, and nobody reads the advanced panel.
+- **Metadata is stripped, and for images it is not optional.** Photos carry the
+  GPS coordinates of where they were taken, and nobody reads the advanced panel.
+  Images are decoded to pixels and re-encoded, so EXIF has nowhere to survive —
+  the Strip metadata switch is real for audio and video tags, and the UI says so
+  rather than implying it governs everything.
 - The counter measures bytes **sent**, not bytes received. Those are different
   numbers, and conflating them was one of the bugs in this repo's history: the
   first version proudly reported "600 B uploaded" while uploading nothing.
@@ -124,8 +129,11 @@ asterisk no longer has to exist.
   than crashing the tab twenty minutes in. Practically: video to ~300 MB, images
   to ~90 MB.
 - **HEIC decodes, it does not encode.** Nobody wants a HEIC; they want out of one.
-- **GIF is first frame only.** Animation needs frame handling the image path
-  doesn't do yet.
+- **GIF is written from video only.** Video → animated GIF works (palette
+  generated per clip, looping forever, presets that set frame rate and width).
+  Image → GIF does not exist on purpose: a single-frame GIF from a PNG is worse
+  than the PNG in every way and would download 9.7 MB to produce. Reading a GIF
+  still gives you its first frame.
 - **AVI reads but doesn't write.** It's a container people escape, not one they
   ask for.
 - **No Office documents** (docx/xlsx/pptx). LibreOffice-in-the-browser is a
@@ -166,7 +174,7 @@ skipping those hooks yields a site whose audio conversions 404 and which has no
 offline support, with no error to explain either.
 
 Conversion tests need a real browser, because mocking a wasm codec tests the
-mock. **522 browser tests run across Chromium, Firefox and WebKit**, plus 62 in
+mock. **570 browser tests run across Chromium, Firefox and WebKit**, plus 78 in
 node. The cross-browser matrix runs nightly rather than per-push: browser
 differences change with browser releases, not with our commits.
 

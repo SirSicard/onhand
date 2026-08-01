@@ -3,16 +3,13 @@ import Base from "../layouts/Base.astro";
 import Converter from "../components/Converter";
 import EnvironmentReport from "../components/EnvironmentReport";
 import { PAIRS, slugFor, titleFor } from "../lib/pairs";
-import { FORMATS, targetsFor } from "../engine/formats";
+import { CONVERSION_COUNT, FORMATS } from "../engine/formats";
 
 // The most-wanted conversions, in the order pairs.ts ranks them. Generated
 // rather than written out, so this cannot advertise a pair that does not exist.
 const popular = PAIRS.slice(0, 12);
 
-const counts = {
-  formats: Object.keys(FORMATS).length,
-  pairs: Object.values(FORMATS).reduce((n, f) => n + targetsFor(f.id).length, 0),
-};
+const counts = { formats: Object.keys(FORMATS).length, pairs: CONVERSION_COUNT };
 ---
 
 <Base
@@ -104,6 +101,7 @@ const counts = {
 
     <footer class="text-center text-sm text-glass-600 dark:text-glass-400">
       <p>
+        <a href="/tools/" class="hover:text-copper-500">Tools</a> ·
         <a href="/formats/" class="hover:text-copper-500">All formats</a> ·
         <a href="/why/" class="hover:text-copper-500">Why this exists</a> ·
         <a href="https://github.com/SirSicard/onhand" class="hover:text-copper-500">Source</a>

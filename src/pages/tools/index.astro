@@ -1,0 +1,56 @@
+---
+import Base from "../../layouts/Base.astro";
+import { TOOLS } from "../../lib/tools";
+
+/**
+ * The index of intent pages. Short by design — if this ever needs pagination,
+ * there are too many tools and some of them are padding.
+ */
+---
+
+<Base
+  title="Tools — convert, compress and strip files in your browser | Onhand"
+  description="Everything Onhand does, organised by what you're trying to do rather than by file format. Convert iPhone photos, extract audio, compress images, make GIFs, build PDFs, remove location data."
+>
+  <main class="mx-auto flex min-h-dvh max-w-2xl flex-col gap-10 px-6 py-16">
+    <header>
+      <nav class="mb-6 text-sm text-glass-600 dark:text-glass-400">
+        <a href="/" class="hover:text-copper-500">Onhand</a>
+      </nav>
+      <h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">Tools</h1>
+      <p class="mt-4 text-lg text-glass-600 dark:text-glass-400">
+        The same converter, arranged by what you're trying to do. If you already know the two format
+        names, the <a
+          href="/formats/"
+          class="text-copper-700 underline underline-offset-2 dark:text-copper-400">format table</a
+        > is the faster route.
+      </p>
+    </header>
+
+    <ul class="flex flex-col gap-3">
+      {
+        TOOLS.map((tool) => (
+          <li>
+            <a
+              href={`/tools/${tool.slug}/`}
+              class="block rounded-2xl border border-glass-200 bg-glass-100 px-5 py-4 transition-colors duration-150 ease-[var(--ease-out-quart)] hover:border-copper-400 motion-reduce:transition-none dark:border-glass-800 dark:bg-glass-900"
+            >
+              <span class="font-medium">{tool.title}</span>
+              <span class="mt-1 block text-sm text-glass-600 dark:text-glass-400">
+                {tool.intro[0]}
+              </span>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+
+    <footer class="text-center text-sm text-glass-600 dark:text-glass-400">
+      <p>
+        <a href="/" class="hover:text-copper-500">Convert something</a> ·
+        <a href="/formats/" class="hover:text-copper-500">All formats</a> ·
+        <a href="/why/" class="hover:text-copper-500">Why this exists</a>
+      </p>
+    </footer>
+  </main>
+</Base>

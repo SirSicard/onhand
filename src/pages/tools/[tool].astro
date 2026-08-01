@@ -1,0 +1,114 @@
+---
+import Base from "../../layouts/Base.astro";
+import Converter from "../../components/Converter";
+import { TOOLS } from "../../lib/tools";
+import { PAIRS, slugFor, titleFor } from "../../lib/pairs";
+
+/**
+ * One page per intent.
+ *
+ * The pair pages answer a question phrased as two format names. These answer it
+ * phrased as a problem — which is how people have it before they know a format
+ * is involved. Everything here is hand-written per tool; there is no derived
+ * copy, because a tool page whose text could have been generated is a pair page
+ * with a verb in the title.
+ */
+export function getStaticPaths() {
+  return TOOLS.map((tool) => ({ params: { tool: tool.slug }, props: { tool } }));
+}
+
+const { tool } = Astro.props;
+
+// Link to the pair pages this intent covers. Resolved against PAIRS rather than
+// built from the slugs, so a link cannot outlive the page it points at.
+const links = tool.pairs
+  .map(([source, target]) => PAIRS.find((p) => p.source === source && p.target === target))
+  .filter((p) => p !== undefined);
+
+// HowTo would be the tempting markup here and it is the wrong one: Google
+// deprecated HowTo rich results in 2023, and marking up something that renders
+// nothing is how a site accumulates structured data nobody checks. WebPage with
+// a real breadcrumb is honest and still useful.
+const breadcrumb = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  itemListElement: [
+    { "@type": "ListItem", position: 1, name: "Onhand", item: new URL("/", Astro.site).href },
+    { "@type": "ListItem", position: 2, name: "Tools", item: new URL("/tools/", Astro.site).href },
+    { "@type": "ListItem", position: 3, name: tool.title },
+  ],
+};
+---
+
+<Base title={tool.metaTitle} description={tool.description}>
+  <script type="application/ld+json" slot="head" set:html={JSON.stringify(breadcrumb)} />
+
+  <main class="mx-auto flex min-h-dvh max-w-3xl flex-col gap-10 px-6 py-16">
+    <header>
+      <nav class="mb-6 text-sm text-glass-600 dark:text-glass-400">
+        <a href="/" class="hover:text-copper-500">Onhand</a>
+        <span aria-hidden="true"> / </span>
+        <a href="/tools/" class="hover:text-copper-500">Tools</a>
+      </nav>
+      <h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">{tool.title}</h1>
+      {
+        tool.intro.map((p, i) => (
+          <p
+            class:list={[
+              "text-glass-600 dark:text-glass-400",
+              i === 0 ? "mt-4 text-lg" : "mt-3 text-lg",
+            ]}
+          >
+            {p}
+          </p>
+        ))
+      }
+    </header>
+
+    <Converter client:load initialTarget={tool.target} />
+
+    <section>
+      <h2 class="text-xl font-semibold">Worth knowing</h2>
+      <dl class="mt-5 flex flex-col gap-6">
+        {
+          tool.points.map((point) => (
+            <div>
+              <dt class="font-medium">{point.heading}</dt>
+              <dd class="mt-1 text-glass-600 dark:text-glass-400">{point.body}</dd>
+            </div>
+          ))
+        }
+      </dl>
+    </section>
+
+    {
+      links.length > 0 && (
+        <section>
+          <h2 class="text-xl font-semibold">The specific conversions</h2>
+          <ul class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {links.map((pair) => (
+              <li>
+                <a
+                  href={`/${slugFor(pair)}/`}
+                  class="block rounded-xl border border-glass-200 bg-glass-100 px-3 py-2.5 text-center text-sm font-medium transition-colors duration-150 ease-[var(--ease-out-quart)] hover:border-copper-400 hover:text-copper-700 motion-reduce:transition-none dark:border-glass-800 dark:bg-glass-900 dark:hover:text-copper-400"
+                >
+                  {titleFor(pair)}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )
+    }
+
+    <footer class="text-center text-sm text-glass-600 dark:text-glass-400">
+      <p>
+        <a href="/tools/" class="hover:text-copper-500">All tools</a> ·
+        <a href="/formats/" class="hover:text-copper-500">All formats</a> ·
+        <a href="/why/" class="hover:text-copper-500">Why this exists</a> ·
+        <a href="https://github.com/SirSicard/onhand" class="hover:text-copper-500">Source</a>
+      </p>
+      <p class="mt-2">MIT licensed. No accounts, no telemetry, no ads.</p>
+    </footer>
+  </main>
+</Base>

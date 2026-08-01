@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { PAIRS, slugFor } from "@/lib/pairs";
+import { TOOLS } from "@/lib/tools";
 
 /**
  * Hand-rolled rather than @astrojs/sitemap, because the priority is not
@@ -14,12 +15,22 @@ export const GET: APIRoute = ({ site }) => {
   const urls = [
     { loc: "/", priority: "1.0", changefreq: "weekly" },
     { loc: "/formats/", priority: "0.8", changefreq: "monthly" },
+    { loc: "/tools/", priority: "0.8", changefreq: "monthly" },
+    // Intent pages sit above every pair page but the very top few: they answer
+    // the question people ask before they know which formats are involved.
+    ...TOOLS.map((tool) => ({
+      loc: `/tools/${tool.slug}/`,
+      priority: "0.85",
+      changefreq: "monthly",
+    })),
     { loc: "/why/", priority: "0.7", changefreq: "monthly" },
     ...PAIRS.map((pair) => ({
       loc: `/${slugFor(pair)}/`,
-      // Ranked pairs get ranked priority, tapering from 0.9 down to 0.4. A
-      // sitemap where everything is 1.0 conveys nothing.
-      priority: Math.max(0.4, 0.9 - (pair.rank - 1) * 0.012).toFixed(2),
+      // Ranked pairs get ranked priority, tapering from 0.9 down to 0.3. A
+      // sitemap where everything is 1.0 conveys nothing — and the step is set
+      // against the actual number of pairs, so the taper still discriminates at
+      // the bottom of the list rather than flooring out a third of the way in.
+      priority: Math.max(0.3, 0.9 - (pair.rank - 1) * 0.004).toFixed(2),
       changefreq: "monthly",
     })),
   ];

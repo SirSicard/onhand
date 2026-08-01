@@ -1,7 +1,7 @@
 ---
 import Base from "../layouts/Base.astro";
 import Converter from "../components/Converter";
-import { PAIRS, slugFor, titleFor } from "../lib/pairs";
+import { OG_CARD_LIMIT, PAIRS, slugFor, titleFor } from "../lib/pairs";
 import { FORMATS } from "../engine/formats";
 
 /**
@@ -74,7 +74,12 @@ const faqs = [
   },
 ];
 
-const ogImage = `/og/${slugFor(pair)}.png`;
+// Only the head of the ranking gets a bespoke card — see OG_CARD_LIMIT. The
+// rest fall back to the site card, which is accurate, just less specific. A
+// <meta> pointing at a PNG that was never generated is worse than either:
+// Cloudflare answers it with the 404 page at HTTP 200, so every social preview
+// for those pages would render a broken image.
+const ogImage = pair.rank <= OG_CARD_LIMIT ? `/og/${slugFor(pair)}.png` : "/og.png";
 const description = `Convert ${from.label} to ${to.label} in your browser. Nothing is uploaded — the conversion runs on your own device. Free, no account, no file size cap.`;
 
 // FAQPage structured data, matching the questions actually on the page. Marking
@@ -112,7 +117,7 @@ const faqSchema = {
       </p>
     </header>
 
-    <Converter client:load initialTarget={pair.target} />
+    <Converter client:load initialTarget={pair.target} initialSource={pair.source} />
 
     {
       facts.length > 0 && (

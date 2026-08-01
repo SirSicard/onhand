@@ -1,6 +1,12 @@
 ---
 import Base from "../layouts/Base.astro";
-import { FORMATS, targetsFor, type Kind } from "../engine/formats";
+import {
+  CONVERSION_COUNT,
+  FORMATS,
+  SELF_CONVERSION_COUNT,
+  targetsFor,
+  type Kind,
+} from "../engine/formats";
 import { PAIRS, slugFor } from "../lib/pairs";
 
 /**
@@ -26,7 +32,35 @@ const byKind = KIND_ORDER.map((kind) => ({
 
 const pairPages = new Map(PAIRS.map((p) => [`${p.source}>${p.target}`, slugFor(p)]));
 
-const totalPairs = Object.values(FORMATS).reduce((n, f) => n + targetsFor(f.id).length, 0);
+/**
+ * "from video only" for a format that can be written, but never from its own
+ * kind of source.
+ *
+ * GIF is the only one of these today. It is encodable, so it gets no "read
+ * only" badge — but nothing in the image table converts TO it, because a
+ * single-frame GIF from a PNG is worse than the PNG in every way. Without this
+ * label GIF sits in the image rows with no badge and no route into it, which
+ * reads as a missing feature rather than a deliberate one.
+ *
+ * Derived rather than hardcoded, so a future format in the same position gets
+ * labelled without anyone remembering to.
+ */
+function writtenOnlyFrom(id: (typeof FORMATS)[keyof typeof FORMATS]["id"]): string | null {
+  if (!FORMATS[id].encodable) return null;
+  // Self counts. PDF is written from images AND from PDF (a re-save passes
+  // through), so it has a same-kind route in and must not be labelled; GIF has
+  // none at all, which is the case worth telling people about.
+  const kinds = new Set(
+    Object.values(FORMATS)
+      .filter((s) => targetsFor(s.id).some((t) => t.id === id))
+      .map((s) => s.kind),
+  );
+  if (kinds.size === 1 && !kinds.has(FORMATS[id].kind)) return `from ${[...kinds][0]} only`;
+  return null;
+}
+
+const totalPairs = CONVERSION_COUNT;
+const selfPairs = SELF_CONVERSION_COUNT;
 const readable = Object.values(FORMATS).filter((f) => f.decodable).length;
 const writable = Object.values(FORMATS).filter((f) => f.encodable).length;
 ---
@@ -49,6 +83,12 @@ const writable = Object.values(FORMATS).filter((f) => f.encodable).length;
         cannot list a pair the engines don't actually perform — which is worth saying, because every
         competitor's format list is marketing copy and a good half of the entries fail once you try
         them.
+      </p>
+      <p class="mt-3 text-glass-600 dark:text-glass-400">
+        That count is conversions between <em>different</em> formats, each of which has its own page.
+        A further {selfPairs} formats can be re-encoded to themselves — useful for changing the quality
+        or dropping the metadata — which is why picking the same format on both sides is allowed rather
+        than refused.
       </p>
     </header>
 
@@ -82,6 +122,14 @@ const writable = Object.values(FORMATS).filter((f) => f.encodable).length;
                             title="Onhand reads this format but does not write it"
                           >
                             read only
+                          </span>
+                        )}
+                        {writtenOnlyFrom(f.id) && (
+                          <span
+                            class="ml-2 text-xs font-normal text-glass-600 dark:text-glass-400"
+                            title={`Onhand writes ${f.label} only when converting ${writtenOnlyFrom(f.id)?.replace("from ", "").replace(" only", "")}`}
+                          >
+                            written {writtenOnlyFrom(f.id)}
                           </span>
                         )}
                       </th>
