@@ -4,7 +4,7 @@
   "private": true,
   "license": "MIT",
   "type": "module",
-  "description": "Every file converter on one page. Nothing is ever uploaded \u2014 including video.",
+  "description": "Every file converter on one page. Nothing is ever uploaded — including video.",
   "engines": {
     "node": ">=22"
   },
@@ -56,6 +56,7 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitest/browser": "^3.2.7",
+    "axe-core": "^4.12.1",
     "playwright": "^1.62.1",
     "prettier": "^3.6.0",
     "prettier-plugin-astro": "^0.14.1",

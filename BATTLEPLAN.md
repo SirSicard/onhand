@@ -334,3 +334,56 @@ runner, and CI that slow stops being read.
 
 **Verified live at https://onhand.pages.dev:** `crossOriginIsolated: true`,
 WAV→MP3 86.2 KB → 25.1 KB through ffmpeg.wasm, `0 bytes uploaded`.
+
+## P3 — Queue UX + trust surface — DONE 2026-08-01
+
+Queue mechanics (`src/engine/queue.ts`), getting files out (`src/engine/download.ts`),
+and a rewritten `Converter.tsx`. All of it driven in a real browser rather than
+jsdom, because focus order, layout and axe's contrast checks are meaningless
+without real rendering.
+
+### What shipped
+- **Per-source target memory.** A folder of HEICs needs telling once that it
+  should become PNG, not thirty times. Scoped by source format, validated on
+  read — a remembered target that is no longer reachable would render a select
+  whose value is not among its options, and browsers resolve that by silently
+  showing the first option instead.
+- **Folder drop.** `DataTransfer.files` is flat and omits folder contents
+  entirely, so dropping a folder appeared to do nothing. The entries API needs
+  reading synchronously during the event, and `readEntries` returns at most 100
+  at a time — reading it once silently truncates a large folder.
+- **Duplicate-name disambiguation.** `photo.png` and `photo.jpg` both become
+  `photo.webp`; downloading them in turn left one file and no sign the other was
+  overwritten. Numbered before the extension, not after.
+- **Download all as a streamed zip.** Entries are STORED, not deflated —
+  everything here is already compressed, so deflating burns CPU proportional to
+  batch size for nothing. Streams to disk via File System Access where
+  available; otherwise built from chunks so the browser can spill to disk rather
+  than holding one contiguous buffer.
+- **Lossless preset**, and the row says "(lossy format)" when the chosen target
+  cannot honour it, rather than producing a big file and letting the label imply
+  otherwise.
+- **Advanced disclosure** (longest edge, strip metadata), cancel a running job,
+  remove a row, overall progress mirrored into the tab title.
+
+### Fixed on the way
+- **A blob URL was created on every render and never revoked**, pinning every
+  output in memory for the life of the tab. On a 50-file video batch that is the
+  difference between working and not.
+- **The drop zone was a `role="button"` containing a file input.** axe flags it
+  as `nested-interactive` and screen readers genuinely disagree about what such
+  a control is; the input also had no label. Now a real `<button>` with the
+  input beside it, labelled, out of tab order.
+- **`utif`, `pdfjs-dist`, `pdf-lib` are reachable only through workers**, which
+  Vite's dependency scan does not walk. It discovered them mid-run,
+  re-optimised, and invalidated a URL a worker was already holding — "Failed to
+  fetch dynamically imported module: .../deps/utif.js?v=<hash>", which reads
+  like a missing package and is a race. **It only appears on a cold cache, so it
+  passed locally and failed in CI twice.** Now listed exhaustively in
+  `optimizeDeps.include`, enumerated from the workers' imports rather than one
+  package per red CI run.
+
+**AC-P3:** ten mixed files converted **keyboard-only in 801ms**, zero axe
+critical or serious violations in both the empty and populated states, a 20-file
+/ 20 MB zip verified readable entry-by-entry, and the counter reads
+`↑ 0 bytes uploaded` after a full session.

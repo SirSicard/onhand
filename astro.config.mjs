@@ -59,6 +59,17 @@ export default defineConfig({
       assetsInlineLimit: 0,
     },
     optimizeDeps: {
+      // Pre-bundle these EXPLICITLY. They are imported only from inside
+      // workers, which Vite's initial dependency scan does not walk — so it
+      // discovers them mid-run, re-optimises, and invalidates the URL a worker
+      // is already holding. The failure is "Failed to fetch dynamically
+      // imported module: .../deps/utif.js?v=<hash>", which reads like a missing
+      // package and is a race. It only appears on a COLD cache, so it passes
+      // locally and fails in CI — twice, before this line existed. Listed
+      // exhaustively from the workers' imports rather than one package per red
+      // CI run; the wasm codec packages are deliberately absent, they belong
+      // in `exclude` below.
+      include: ["utif", "pdf-lib", "pdfjs-dist", "mediabunny", "comlink"],
       // Codec packages locate their .wasm via `new URL('./x.wasm', import.meta.url)`.
       // Vite's dep pre-bundling rewrites import.meta.url, so the wasm request
       // resolves to a path that doesn't exist and the dev server answers with

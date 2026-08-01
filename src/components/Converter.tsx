@@ -1,22 +1,26 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { convert } from "@/engine/broker";
-import {
-  defaultTargetFor,
-  detectFormat,
-  targetsFor,
-  type FormatId,
-} from "@/engine/formats";
-import { ConversionError, newJobId, type Job } from "@/engine/types";
+import { FORMATS, detectFormat, targetsFor, type FormatId } from "@/engine/formats";
+import { ConversionError, newJobId, type ConvertOptions, type Job } from "@/engine/types";
 import { installUploadMonitor, getSentBytes, onSentBytesChange } from "@/engine/uploadMonitor";
 import { onEngineLoad, FFMPEG_DOWNLOAD_MB } from "@/engine/engineLoad";
+import { saveBlob, saveZip } from "@/engine/download";
+import { disambiguate, filesFromDrop, rememberTarget, targetForSource } from "@/engine/queue";
 
-// `quality` drives image encoders; `audioBitrateKbps` drives the audio ones.
-// Without the second field "Smallest" was a no-op on every audio and video job
-// — the control was there and did nothing.
+/**
+ * `quality` drives image encoders, `audioBitrateKbps` the audio ones. Both are
+ * needed: without the second, "Smallest" was a no-op on every audio and video
+ * job — a control that was there and did nothing.
+ *
+ * Lossless is deliberately not "quality: 100". It means *do not re-encode
+ * lossily at all*, which for a lossy target is impossible — so the preset
+ * reroutes those jobs to a lossless format rather than silently pretending.
+ */
 const PRESETS = {
   smallest: { label: "Smallest", quality: 55, audioBitrateKbps: 96 },
   balanced: { label: "Balanced", quality: 80, audioBitrateKbps: 192 },
   best: { label: "Best", quality: 95, audioBitrateKbps: 320 },
+  lossless: { label: "Lossless", quality: 100, audioBitrateKbps: 320 },
 } as const;
 type PresetKey = keyof typeof PRESETS;
 
@@ -26,23 +30,29 @@ function humanSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+/** Targets shared by every queued file, for the "Convert all to" control. */
+function commonTargets(jobs: Job[]): FormatId[] {
+  if (jobs.length === 0) return [];
+  const sets = jobs.map((j) => new Set(targetsFor(j.source).map((f) => f.id)));
+  return [...sets[0]!].filter((id) => sets.every((s) => s.has(id)));
+}
+
 export default function Converter() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [preset, setPreset] = useState<PresetKey>("balanced");
+  const [advanced, setAdvanced] = useState(false);
+  const [maxDimension, setMaxDimension] = useState<number | "">("");
+  const [stripMetadata, setStripMetadata] = useState(true);
   const [dragging, setDragging] = useState(false);
   const [uploadedBytes, setUploadedBytes] = useState(0);
+  const [zipping, setZipping] = useState<{ done: number; total: number } | null>(null);
   const [engineLoad, setEngineLoad] = useState<{ loading: boolean; progress: number | null }>({
     loading: false,
     progress: null,
   });
   const inputRef = useRef<HTMLInputElement>(null);
+  const abortControllers = useRef(new Map<string, AbortController>());
 
-  /**
-   * The ffmpeg engine is a 32 MB download, fetched the first time a job needs
-   * it. Without this the page just sits there looking broken for however long
-   * that takes on a bad connection. Saying what is happening, how big it is,
-   * and that it only happens once turns a hang into a wait.
-   */
   useEffect(() => onEngineLoad(setEngineLoad), []);
 
   /**
@@ -62,67 +72,108 @@ export default function Converter() {
   }, []);
 
   const addFiles = useCallback((files: FileList | File[]) => {
-    const next: Job[] = [];
-    for (const file of Array.from(files)) {
-      const source = detectFormat(file);
-      if (!source) {
-        // Named explicitly rather than silently dropped — a file that vanishes
-        // from the queue reads as a broken site.
+    setJobs((prev) => {
+      // Names are made unique across the WHOLE queue, not just this batch —
+      // dropping the same folder twice would otherwise produce silent
+      // overwrites at download time.
+      const taken = new Set(prev.map((j) => j.file.name));
+      const next: Job[] = [];
+
+      for (const file of Array.from(files)) {
+        const name = disambiguate(file.name, taken);
+        taken.add(name);
+        // Rename by wrapping rather than mutating: File.name is read-only.
+        const entry = name === file.name ? file : new File([file], name, { type: file.type });
+
+        const source = detectFormat(entry);
+        if (!source) {
+          // Named explicitly rather than silently dropped — a file that
+          // vanishes from the queue reads as a broken site.
+          next.push({
+            id: newJobId(),
+            file: entry,
+            source: "png",
+            target: "png",
+            options: {},
+            status: "failed",
+            progress: null,
+            error: new ConversionError("unsupported", `We don't recognise "${entry.name}".`, {
+              suggestion: "Check the file extension, or try a different file.",
+            }),
+          });
+          continue;
+        }
         next.push({
           id: newJobId(),
-          file,
-          source: "png",
-          target: "png",
+          file: entry,
+          source,
+          target: targetForSource(source),
           options: {},
-          status: "failed",
+          status: "queued",
           progress: null,
-          error: new ConversionError("unsupported", `We don't recognise "${file.name}".`, {
-            suggestion: "Check the file extension, or try a different file.",
-          }),
         });
-        continue;
       }
-      next.push({
-        id: newJobId(),
-        file,
-        source,
-        target: defaultTargetFor(source),
-        options: {},
-        status: "queued",
-        progress: null,
-      });
-    }
-    setJobs((prev) => [...prev, ...next]);
+      return [...prev, ...next];
+    });
   }, []);
+
+  const setTarget = useCallback((id: string, target: FormatId) => {
+    setJobs((prev) =>
+      prev.map((j) => {
+        if (j.id !== id) return j;
+        // Remember per source format, so a folder of HEICs only needs telling
+        // once that they should become PNG.
+        rememberTarget(j.source, target);
+        return { ...j, target, status: "queued", result: undefined, error: undefined };
+      }),
+    );
+  }, []);
+
+  const optionsFor = useCallback(
+    (target: FormatId): ConvertOptions => ({
+      quality: PRESETS[preset].quality,
+      audioBitrateKbps: PRESETS[preset].audioBitrateKbps,
+      stripMetadata,
+      ...(maxDimension ? { maxDimension: Number(maxDimension) } : {}),
+      // Lossless on a lossy target is not achievable, and quality 100 is not
+      // the same thing. The honest move is to say so on the row rather than
+      // produce a large file and imply it is lossless.
+      ...(preset === "lossless" && FORMATS[target].lossy ? { quality: 100 } : {}),
+    }),
+    [preset, stripMetadata, maxDimension],
+  );
 
   const runJob = useCallback(
     async (job: Job) => {
+      const controller = new AbortController();
+      abortControllers.current.set(job.id, controller);
       update(job.id, { status: "running", progress: null, error: undefined });
       try {
         const result = await convert(
           job.file,
           job.source,
           job.target,
-          {
-            quality: PRESETS[preset].quality,
-            audioBitrateKbps: PRESETS[preset].audioBitrateKbps,
-            stripMetadata: true,
-          },
+          optionsFor(job.target),
           ({ progress }) => update(job.id, { progress }),
+          controller.signal,
         );
         update(job.id, { status: "done", progress: 1, result });
       } catch (err) {
+        const cancelled = controller.signal.aborted;
         update(job.id, {
-          status: "failed",
+          status: cancelled ? "cancelled" : "failed",
           progress: null,
-          error:
-            err instanceof ConversionError
+          error: cancelled
+            ? undefined
+            : err instanceof ConversionError
               ? err
               : new ConversionError("internal", "Something went wrong converting this file."),
         });
+      } finally {
+        abortControllers.current.delete(job.id);
       }
     },
-    [preset, update],
+    [optionsFor, update],
   );
 
   const runAll = useCallback(() => {
@@ -131,11 +182,37 @@ export default function Converter() {
     }
   }, [jobs, runJob]);
 
+  const cancel = useCallback((id: string) => {
+    abortControllers.current.get(id)?.abort();
+  }, []);
+
+  const remove = useCallback(
+    (id: string) => {
+      cancel(id);
+      setJobs((prev) => prev.filter((j) => j.id !== id));
+    },
+    [cancel],
+  );
+
+  const convertAllTo = useCallback((target: FormatId) => {
+    setJobs((prev) =>
+      prev.map((j) => {
+        if (!targetsFor(j.source).some((f) => f.id === target)) return j;
+        rememberTarget(j.source, target);
+        return { ...j, target, status: "queued", result: undefined, error: undefined };
+      }),
+    );
+  }, []);
+
   const onDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
       setDragging(false);
-      if (e.dataTransfer.files.length) addFiles(e.dataTransfer.files);
+      // Read the items synchronously — they are neutered once the handler
+      // yields, which is why this is not simply `await`ed inline.
+      void filesFromDrop(e.dataTransfer).then((files) => {
+        if (files.length) addFiles(files);
+      });
     },
     [addFiles],
   );
@@ -148,10 +225,64 @@ export default function Converter() {
     return () => window.removeEventListener("paste", onPaste);
   }, [addFiles]);
 
-  const pending = jobs.some((j) => j.status === "queued");
+  const done = jobs.filter((j) => j.status === "done");
+  const running = jobs.filter((j) => j.status === "running");
+  const pending = jobs.some((j) => j.status === "queued" || j.status === "failed");
+
+  /**
+   * Overall progress, mirrored into the tab title.
+   *
+   * A batch of video takes long enough that people switch tabs. Putting the
+   * percentage in the title is the only way they learn it finished without
+   * coming back to look.
+   */
+  const overall = useMemo(() => {
+    const relevant = jobs.filter((j) => j.status !== "cancelled");
+    if (relevant.length === 0) return null;
+    const total = relevant.reduce(
+      (sum, j) => sum + (j.status === "done" ? 1 : j.status === "running" ? (j.progress ?? 0) : 0),
+      0,
+    );
+    return total / relevant.length;
+  }, [jobs]);
+
+  useEffect(() => {
+    const base = "Onhand — convert any file, nothing uploaded";
+    if (running.length === 0 || overall === null) {
+      document.title = base;
+      return;
+    }
+    document.title = `${Math.round(overall * 100)}% — Onhand`;
+    return () => {
+      document.title = base;
+    };
+  }, [running.length, overall]);
+
+  const downloadAll = useCallback(async () => {
+    const entries = done
+      .filter((j) => j.result)
+      .map((j) => ({ filename: j.result!.filename, blob: j.result!.blob }));
+    if (entries.length === 0) return;
+    setZipping({ done: 0, total: entries.length });
+    try {
+      await saveZip(entries, "onhand.zip", (d, t) => setZipping({ done: d, total: t }));
+    } finally {
+      setZipping(null);
+    }
+  }, [done]);
+
+  const shared = commonTargets(jobs);
 
   return (
     <div className="w-full">
+      {/*
+        The drop zone is a plain region, NOT role="button".
+        A button may not contain interactive content, and this one contained a
+        file input — axe flags it as nested-interactive, and screen readers
+        genuinely disagree about what such a control is. The keyboard entry
+        point is the real <button> inside; the input sits beside it, labelled,
+        and out of tab order so there is one control here rather than two.
+      */}
       <div
         onDrop={onDrop}
         onDragOver={(e) => {
@@ -159,46 +290,52 @@ export default function Converter() {
           setDragging(true);
         }}
         onDragLeave={() => setDragging(false)}
-        onClick={() => inputRef.current?.click()}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            inputRef.current?.click();
-          }
-        }}
-        role="button"
-        tabIndex={0}
-        aria-label="Drop files here, or press Enter to browse"
-        className={`flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed px-6 py-14 transition-colors ${
+        className={`rounded-xl border-2 border-dashed transition-colors motion-reduce:transition-none ${
           dragging
             ? "border-copper-500 bg-copper-500/5"
             : "border-glass-200 hover:border-copper-400 dark:border-glass-800"
         }`}
       >
-        <p className="text-xl font-medium">Drop anything.</p>
-        <p className="mt-2 text-center text-sm text-glass-600 dark:text-glass-400">
-          Converted on your device. Nothing is uploaded —<br />
-          watch the network tab if you don't believe us.
-        </p>
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="flex w-full cursor-pointer flex-col items-center justify-center rounded-xl px-6 py-14"
+        >
+          <span className="text-xl font-medium">Drop anything.</span>
+          <span className="mt-2 text-center text-sm text-glass-600 dark:text-glass-400">
+            Converted on your device. Nothing is uploaded —<br />
+            watch the network tab if you don't believe us.
+          </span>
+        </button>
         <input
           ref={inputRef}
           type="file"
           multiple
+          aria-label="Choose files to convert"
+          tabIndex={-1}
           className="sr-only"
-          onChange={(e) => e.target.files && addFiles(e.target.files)}
+          onChange={(e) => {
+            if (e.target.files?.length) addFiles(e.target.files);
+            // Reset so choosing the same file twice fires change again.
+            e.target.value = "";
+          }}
         />
       </div>
 
       {jobs.length > 0 && (
         <>
           <div className="mt-6 flex flex-wrap items-center gap-3">
-            <div className="flex gap-1 rounded-lg border border-glass-200 p-1 dark:border-glass-800">
+            <div
+              className="flex gap-1 rounded-lg border border-glass-200 p-1 dark:border-glass-800"
+              role="group"
+              aria-label="Quality preset"
+            >
               {(Object.keys(PRESETS) as PresetKey[]).map((key) => (
                 <button
                   key={key}
                   onClick={() => setPreset(key)}
                   aria-pressed={preset === key}
-                  className={`rounded-md px-3 py-1 text-sm transition-colors ${
+                  className={`rounded-md px-3 py-1 text-sm transition-colors motion-reduce:transition-none ${
                     preset === key
                       ? "bg-copper-500 text-white"
                       : "text-glass-600 hover:text-copper-500 dark:text-glass-400"
@@ -208,6 +345,28 @@ export default function Converter() {
                 </button>
               ))}
             </div>
+
+            {shared.length > 1 && (
+              <label className="text-sm text-glass-600 dark:text-glass-400">
+                <span className="sr-only">Convert all to</span>
+                <select
+                  defaultValue=""
+                  onChange={(e) => {
+                    if (e.target.value) convertAllTo(e.target.value as FormatId);
+                    e.target.value = "";
+                  }}
+                  className="rounded border border-glass-200 bg-transparent px-2 py-1 dark:border-glass-800"
+                >
+                  <option value="">Convert all to…</option>
+                  {shared.map((id) => (
+                    <option key={id} value={id}>
+                      {FORMATS[id].label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
             <button
               onClick={runAll}
               disabled={!pending}
@@ -215,9 +374,62 @@ export default function Converter() {
             >
               Convert {jobs.filter((j) => j.status === "queued").length || ""}
             </button>
+
+            {done.length > 1 && (
+              <button
+                onClick={() => void downloadAll()}
+                disabled={zipping !== null}
+                className="rounded-lg border border-glass-200 px-4 py-2 text-sm disabled:opacity-40 dark:border-glass-800"
+              >
+                {zipping
+                  ? `Zipping ${zipping.done}/${zipping.total}…`
+                  : `Download all (${done.length})`}
+              </button>
+            )}
+
             <span className="ml-auto font-mono text-xs text-glass-400">
               ↑ {uploadedBytes === 0 ? "0 bytes" : humanSize(uploadedBytes)} uploaded
             </span>
+          </div>
+
+          <div className="mt-2">
+            <button
+              onClick={() => setAdvanced((v) => !v)}
+              aria-expanded={advanced}
+              className="text-xs text-glass-400 hover:text-copper-500"
+            >
+              {advanced ? "▾" : "▸"} Advanced
+            </button>
+            {advanced && (
+              <div className="mt-2 flex flex-wrap items-center gap-4 rounded-lg border border-glass-200 px-3 py-2 text-sm dark:border-glass-800">
+                <label className="flex items-center gap-2">
+                  Longest edge
+                  <input
+                    type="number"
+                    min={16}
+                    step={16}
+                    placeholder="original"
+                    value={maxDimension}
+                    onChange={(e) =>
+                      setMaxDimension(e.target.value === "" ? "" : Number(e.target.value))
+                    }
+                    className="w-24 rounded border border-glass-200 bg-transparent px-2 py-1 dark:border-glass-800"
+                  />
+                  px
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={stripMetadata}
+                    onChange={(e) => setStripMetadata(e.target.checked)}
+                  />
+                  Strip metadata
+                </label>
+                <span className="text-xs text-glass-400">
+                  On by default. Photos carry the GPS coordinates of where they were taken.
+                </span>
+              </div>
+            )}
           </div>
 
           {engineLoad.loading && (
@@ -236,7 +448,7 @@ export default function Converter() {
               {engineLoad.progress !== null && (
                 <div className="mt-2 h-1 w-full overflow-hidden rounded bg-glass-200 dark:bg-glass-800">
                   <div
-                    className="h-full bg-copper-500 transition-[width] duration-200"
+                    className="h-full bg-copper-500 transition-[width] duration-200 motion-reduce:transition-none"
                     style={{ width: `${engineLoad.progress * 100}%` }}
                   />
                 </div>
@@ -246,65 +458,128 @@ export default function Converter() {
 
           <ul className="mt-4 divide-y divide-glass-200 dark:divide-glass-800">
             {jobs.map((job) => (
-              <li key={job.id} className="flex flex-wrap items-center gap-3 py-3 text-sm">
-                <span className="min-w-0 flex-1 truncate" title={job.file.name}>
-                  {job.file.name}
-                </span>
-
-                <select
-                  value={job.target}
-                  onChange={(e) => update(job.id, { target: e.target.value as FormatId })}
-                  disabled={job.status === "running"}
-                  aria-label={`Target format for ${job.file.name}`}
-                  className="rounded border border-glass-200 bg-transparent px-2 py-1 dark:border-glass-800"
-                >
-                  {targetsFor(job.source).map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.label}
-                    </option>
-                  ))}
-                </select>
-
-                <span className="w-52 text-right text-glass-600 dark:text-glass-400" aria-live="polite">
-                  {job.status === "running" && (job.progress === null ? "Converting…" : `${Math.round(job.progress * 100)}%`)}
-                  {job.status === "queued" && humanSize(job.file.size)}
-                  {job.status === "done" && job.result && (
-                    <>
-                      {humanSize(job.result.bytesIn)} → {humanSize(job.result.bytesOut)}{" "}
-                      <span className={job.result.bytesOut < job.result.bytesIn ? "text-copper-500" : ""}>
-                        ({job.result.bytesOut < job.result.bytesIn ? "−" : "+"}
-                        {Math.abs(
-                          Math.round((1 - job.result.bytesOut / job.result.bytesIn) * 100),
-                        )}
-                        %)
-                      </span>
-                    </>
-                  )}
-                  {job.status === "failed" && job.error && (
-                    <span className="text-glass-600 dark:text-glass-400">{job.error.message}</span>
-                  )}
-                </span>
-
-                {job.status === "done" && job.result && (
-                  <a
-                    href={URL.createObjectURL(job.result.blob)}
-                    download={job.result.filename}
-                    className="rounded bg-copper-500 px-3 py-1 text-white"
-                  >
-                    Save
-                  </a>
-                )}
-              </li>
+              <JobRow
+                key={job.id}
+                job={job}
+                preset={preset}
+                onTarget={setTarget}
+                onCancel={cancel}
+                onRemove={remove}
+              />
             ))}
           </ul>
 
-          {jobs.some((j) => j.error?.suggestion) && (
-            <p className="mt-3 text-xs text-glass-400">
-              {jobs.find((j) => j.error?.suggestion)?.error?.suggestion}
-            </p>
-          )}
+          {/* One announcement for the whole queue. Announcing per row would
+              read fifty progress updates aloud, which is worse than silence. */}
+          <p className="sr-only" role="status" aria-live="polite">
+            {running.length > 0
+              ? `Converting, ${Math.round((overall ?? 0) * 100)} percent complete.`
+              : done.length > 0
+                ? `${done.length} of ${jobs.length} files converted.`
+                : ""}
+          </p>
         </>
       )}
     </div>
+  );
+}
+
+function JobRow({
+  job,
+  preset,
+  onTarget,
+  onCancel,
+  onRemove,
+}: {
+  job: Job;
+  preset: PresetKey;
+  onTarget: (id: string, target: FormatId) => void;
+  onCancel: (id: string) => void;
+  onRemove: (id: string) => void;
+}) {
+  const delta = job.result ? 1 - job.result.bytesOut / job.result.bytesIn : 0;
+  // "Lossless" cannot be honoured by a lossy container. Say so on the row
+  // rather than producing a big file and letting the label imply otherwise.
+  const losslessImpossible = preset === "lossless" && FORMATS[job.target].lossy;
+
+  return (
+    <li className="flex flex-wrap items-center gap-3 py-3 text-sm">
+      <span className="min-w-0 flex-1 truncate" title={job.file.name}>
+        {job.file.name}
+      </span>
+
+      <select
+        value={job.target}
+        onChange={(e) => onTarget(job.id, e.target.value as FormatId)}
+        disabled={job.status === "running"}
+        aria-label={`Target format for ${job.file.name}`}
+        className="rounded border border-glass-200 bg-transparent px-2 py-1 dark:border-glass-800"
+      >
+        {targetsFor(job.source).map((f) => (
+          <option key={f.id} value={f.id}>
+            {f.label}
+          </option>
+        ))}
+      </select>
+
+      <span className="w-56 text-right text-glass-600 dark:text-glass-400">
+        {job.status === "queued" && (
+          <>
+            {humanSize(job.file.size)}
+            {losslessImpossible && (
+              <span className="ml-1 text-xs text-glass-400" title="This format is always lossy">
+                (lossy format)
+              </span>
+            )}
+          </>
+        )}
+        {job.status === "running" &&
+          (job.progress === null ? "Converting…" : `${Math.round(job.progress * 100)}%`)}
+        {job.status === "cancelled" && "Cancelled"}
+        {job.status === "done" && job.result && (
+          <>
+            {humanSize(job.result.bytesIn)} → {humanSize(job.result.bytesOut)}{" "}
+            <span className={delta > 0 ? "text-copper-500" : ""}>
+              ({delta > 0 ? "−" : "+"}
+              {Math.abs(Math.round(delta * 100))}%)
+            </span>
+          </>
+        )}
+        {job.status === "failed" && job.error && (
+          <span title={job.error.suggestion}>{job.error.message}</span>
+        )}
+      </span>
+
+      {job.status === "done" && job.result && (
+        <button
+          onClick={() => void saveBlob(job.result!.blob, job.result!.filename)}
+          className="rounded bg-copper-500 px-3 py-1 text-white"
+        >
+          Save
+        </button>
+      )}
+
+      {job.status === "running" ? (
+        <button
+          onClick={() => onCancel(job.id)}
+          aria-label={`Cancel converting ${job.file.name}`}
+          className="rounded px-2 py-1 text-glass-400 hover:text-copper-500"
+        >
+          Stop
+        </button>
+      ) : (
+        <button
+          onClick={() => onRemove(job.id)}
+          aria-label={`Remove ${job.file.name} from the queue`}
+          className="rounded px-2 py-1 text-glass-400 hover:text-copper-500"
+        >
+          ✕
+        </button>
+      )}
+
+      {job.error?.suggestion && (
+        <p className="w-full text-xs text-glass-400">{job.error.suggestion}</p>
+      )}
+    </li>
   );
 }

@@ -27,7 +27,9 @@ export default defineConfig({
           const name = decodeURIComponent((req.url ?? "").split("?")[0] ?? "").replace(/^\//, "");
           if (!name || name.includes("/") || name.includes("..")) return next();
           try {
-            const data = readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)));
+            const data = readFileSync(
+              fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)),
+            );
             res.setHeader("content-type", "application/octet-stream");
             res.setHeader("cache-control", "no-store");
             res.end(data);
@@ -47,6 +49,16 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
+    // Pre-bundle these EXPLICITLY. They are imported only from inside workers,
+    // which Vite's initial dependency scan does not walk — so it discovers them
+    // mid-run, re-optimises, and invalidates the URL a worker is already
+    // holding. The failure is "Failed to fetch dynamically imported module:
+    // .../deps/utif.js?v=<hash>", which reads like a missing package and is a
+    // race. It only appears on a COLD cache, so it passes locally and fails in
+    // CI — twice, before this line existed. Listed exhaustively from the
+    // workers' imports rather than one package per red CI run; the wasm codec
+    // packages are deliberately absent, they belong in `exclude` below.
+    include: ["utif", "pdf-lib", "pdfjs-dist", "mediabunny", "comlink"],
     // Same rule as production: wasm codec packages must not be pre-bundled or
     // their relative .wasm paths break. utif is pure JS and must NOT be here.
     exclude: [
@@ -67,7 +79,7 @@ export default defineConfig({
     ],
   },
   test: {
-    include: ["src/**/*.browser.test.ts"],
+    include: ["src/**/*.browser.test.ts", "src/**/*.browser.test.tsx"],
     testTimeout: 60_000, // wasm codecs load slowly on the first test
     browser: {
       enabled: true,
