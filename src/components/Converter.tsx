@@ -38,7 +38,7 @@ function commonTargets(jobs: Job[]): FormatId[] {
   return [...sets[0]!].filter((id) => sets.every((s) => s.has(id)));
 }
 
-export default function Converter() {
+export default function Converter({ initialTarget }: { initialTarget?: FormatId } = {}) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [preset, setPreset] = useState<PresetKey>("balanced");
   const [advanced, setAdvanced] = useState(false);
@@ -74,51 +74,62 @@ export default function Converter() {
     setJobs((prev) => prev.map((j) => (j.id === id ? { ...j, ...patch } : j)));
   }, []);
 
-  const addFiles = useCallback((files: FileList | File[]) => {
-    setJobs((prev) => {
-      // Names are made unique across the WHOLE queue, not just this batch —
-      // dropping the same folder twice would otherwise produce silent
-      // overwrites at download time.
-      const taken = new Set(prev.map((j) => j.file.name));
-      const next: Job[] = [];
+  const addFiles = useCallback(
+    (files: FileList | File[]) => {
+      setJobs((prev) => {
+        // Names are made unique across the WHOLE queue, not just this batch —
+        // dropping the same folder twice would otherwise produce silent
+        // overwrites at download time.
+        const taken = new Set(prev.map((j) => j.file.name));
+        const next: Job[] = [];
 
-      for (const file of Array.from(files)) {
-        const name = disambiguate(file.name, taken);
-        taken.add(name);
-        // Rename by wrapping rather than mutating: File.name is read-only.
-        const entry = name === file.name ? file : new File([file], name, { type: file.type });
+        for (const file of Array.from(files)) {
+          const name = disambiguate(file.name, taken);
+          taken.add(name);
+          // Rename by wrapping rather than mutating: File.name is read-only.
+          const entry = name === file.name ? file : new File([file], name, { type: file.type });
 
-        const source = detectFormat(entry);
-        if (!source) {
-          // Named explicitly rather than silently dropped — a file that
-          // vanishes from the queue reads as a broken site.
+          const source = detectFormat(entry);
+          if (!source) {
+            // Named explicitly rather than silently dropped — a file that
+            // vanishes from the queue reads as a broken site.
+            next.push({
+              id: newJobId(),
+              file: entry,
+              source: "png",
+              target: "png",
+              options: {},
+              status: "failed",
+              progress: null,
+              error: new ConversionError("unsupported", `We don't recognise "${entry.name}".`, {
+                suggestion: "Check the file extension, or try a different file.",
+              }),
+            });
+            continue;
+          }
           next.push({
             id: newJobId(),
             file: entry,
-            source: "png",
-            target: "png",
+            source,
+            // A pair page has already told us what the visitor came for, so
+            // honour it — but only when it is actually reachable from this
+            // source, since they may drop something unrelated on the page.
+            target:
+              initialTarget && targetsFor(source).some((f) => f.id === initialTarget)
+                ? initialTarget
+                : targetForSource(source),
             options: {},
-            status: "failed",
+            status: "queued",
             progress: null,
-            error: new ConversionError("unsupported", `We don't recognise "${entry.name}".`, {
-              suggestion: "Check the file extension, or try a different file.",
-            }),
           });
-          continue;
         }
-        next.push({
-          id: newJobId(),
-          file: entry,
-          source,
-          target: targetForSource(source),
-          options: {},
-          status: "queued",
-          progress: null,
-        });
-      }
-      return [...prev, ...next];
-    });
-  }, []);
+        return [...prev, ...next];
+      });
+      // initialTarget comes from the pair page and is stable for the page's life,
+      // but declaring it keeps the hook honest rather than relying on that.
+    },
+    [initialTarget],
+  );
 
   const setTarget = useCallback((id: string, target: FormatId) => {
     setJobs((prev) =>

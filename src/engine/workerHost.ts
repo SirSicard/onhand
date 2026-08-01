@@ -76,3 +76,47 @@ export function createWorkerHost<Api>(create: () => Worker, label: string): Work
     },
   };
 }
+
+/**
+ * Reject if `promise` goes `stallMs` without anyone calling `tick()`.
+ *
+ * A stall detector, not a time limit, and the difference matters: a 2 GB video
+ * legitimately takes minutes but never goes half a minute without a packet.
+ * Silence is the signal.
+ *
+ * This exists because WebCodecs can accept a job, report itself capable, and
+ * then never produce output. Measured on CI: every Ogg/Vorbis conversion sat at
+ * zero progress until the test timeout, on browsers whose `canDecodeAudio`
+ * answered `true`. The capability check is a hint, not a promise, so something
+ * has to bound the wait.
+ */
+export function withStallTimeout<T>(
+  promise: Promise<T>,
+  stallMs: number,
+  onStall?: () => void,
+): { result: Promise<T>; tick: () => void; dispose: () => void } {
+  let last = performance.now();
+  let timer: ReturnType<typeof setInterval> | undefined;
+
+  const stalled = new Promise<never>((_, reject) => {
+    // Polled rather than a single timer, so each tick doesn't have to tear one
+    // down and build another — this fires on every decoded packet.
+    timer = setInterval(
+      () => {
+        if (performance.now() - last < stallMs) return;
+        onStall?.();
+        reject(new Error(`stalled: no progress for ${(stallMs / 1000).toFixed(0)}s`));
+      },
+      Math.max(50, Math.min(2_000, stallMs / 4)),
+    );
+  });
+
+  const dispose = () => clearInterval(timer);
+  return {
+    result: Promise.race([promise, stalled]).finally(dispose),
+    tick: () => {
+      last = performance.now();
+    },
+    dispose,
+  };
+}

@@ -1,0 +1,172 @@
+---
+import Base from "../layouts/Base.astro";
+import Converter from "../components/Converter";
+import { PAIRS, slugFor, titleFor } from "../lib/pairs";
+import { FORMATS } from "../engine/formats";
+
+/**
+ * One page per conversion pair.
+ *
+ * The copy on each is written from the pair's own `reason` and the two format
+ * specs, so no two pages say the same thing with the nouns swapped. That is
+ * partly for search engines and mostly because a page that is obviously a
+ * template is a page that tells the reader nothing.
+ */
+export function getStaticPaths() {
+  return PAIRS.map((pair) => ({ params: { pair: slugFor(pair) }, props: { pair } }));
+}
+
+const { pair } = Astro.props;
+const from = FORMATS[pair.source];
+const to = FORMATS[pair.target];
+const title = titleFor(pair);
+
+// Only true statements. Each is derived from the format table rather than
+// written per page, so they cannot drift from what the engines actually do.
+const facts: string[] = [];
+if (!from.encodable) {
+  facts.push(
+    `Onhand reads ${from.label} but does not write it — the demand runs one way, out of ${from.label} and into something with broader support.`,
+  );
+}
+if (!to.lossy && from.lossy) {
+  facts.push(
+    `${to.label} is lossless, so nothing is thrown away at this step. It will not repair quality already lost in the ${from.label}, and the file will usually be larger.`,
+  );
+}
+if (to.lossy) {
+  facts.push(
+    `${to.label} is lossy. The quality control is a real trade, not a placebo — Smallest, Balanced and Best produce genuinely different files.`,
+  );
+}
+if (from.kind === "video" && to.kind === "audio") {
+  facts.push(
+    `The video track is discarded, not carried along silently — which is the difference between a few megabytes and a few hundred.`,
+  );
+}
+if (pair.source === "heic") {
+  facts.push(
+    `Safari decodes HEIC natively. Chrome and Firefox do not, so on those Onhand loads a decoder the first time — once, then cached.`,
+  );
+}
+if (pair.target === "mp3" || pair.target === "ogg" || pair.source === "avi") {
+  facts.push(
+    `No browser can encode ${to.label === "MP3" ? "MP3" : to.label}${pair.source === "avi" ? " or read AVI" : ""} on its own, so this pair loads a 9.7 MB engine the first time you use it. Once, then cached, and the page tells you before it starts.`,
+  );
+}
+
+const faqs = [
+  {
+    q: `Is my ${from.label} file uploaded anywhere?`,
+    a: `No. The conversion runs inside this browser tab using WebAssembly. There is no server involved, which is why there is no file-size cap, no queue and no account. The counter in the header measures bytes this page sends, and it stays at zero.`,
+  },
+  {
+    q: `Is there a file size limit?`,
+    a: `No imposed limit, but a real one: a browser tab has roughly 1.8 GB of working memory. Onhand estimates before it starts and tells you if a file is too large, rather than failing halfway through.`,
+  },
+  {
+    q: `Does it work offline?`,
+    a: `After one visit, yes. The page and the codecs it has used are cached, and the badge appears only when the codecs for your chosen formats are genuinely available offline — not merely because something is installed.`,
+  },
+  {
+    q: `Can I convert several files at once?`,
+    a: `Yes. Drop a folder, or select many files. Each row gets its own target format, or you can set them all at once, and everything downloads as a single zip.`,
+  },
+];
+
+const description = `Convert ${from.label} to ${to.label} in your browser. Nothing is uploaded — the conversion runs on your own device. Free, no account, no file size cap.`;
+
+// FAQPage structured data, matching the questions actually on the page. Marking
+// up questions that are not visible is exactly the kind of thing that earns a
+// manual action, so this is generated from the same array.
+const faqSchema = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: faqs.map((f) => ({
+    "@type": "Question",
+    name: f.q,
+    acceptedAnswer: { "@type": "Answer", text: f.a },
+  })),
+};
+---
+
+<Base title={`${title} converter — nothing uploaded | Onhand`} description={description}>
+  <main class="mx-auto flex min-h-dvh max-w-3xl flex-col gap-10 px-6 py-16">
+    <header>
+      <nav class="mb-6 text-sm text-glass-600 dark:text-glass-400">
+        <a href="/" class="hover:text-copper-500">Onhand</a>
+        <span aria-hidden="true"> / </span>
+        <a href="/formats" class="hover:text-copper-500">Formats</a>
+      </nav>
+      <h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">
+        Convert {from.label} to {to.label}
+      </h1>
+      <p class="mt-4 text-lg text-glass-600 dark:text-glass-400">{pair.reason}</p>
+      <p class="mt-3 text-lg text-glass-600 dark:text-glass-400">
+        It happens on your device. Nothing is uploaded — <em>including video</em>.
+      </p>
+    </header>
+
+    <Converter client:load initialTarget={pair.target} />
+
+    {
+      facts.length > 0 && (
+        <section>
+          <h2 class="text-xl font-semibold">
+            What changes when you convert {from.label} to {to.label}
+          </h2>
+          <ul class="mt-4 flex flex-col gap-3 text-glass-600 dark:text-glass-400">
+            {facts.map((f) => (
+              <li>{f}</li>
+            ))}
+          </ul>
+        </section>
+      )
+    }
+
+    <section>
+      <h2 class="text-xl font-semibold">How to do it</h2>
+      <ol class="mt-4 flex list-decimal flex-col gap-2 pl-5 text-glass-600 dark:text-glass-400">
+        <li>Drop your {from.label} file above, or click to browse. A whole folder works too.</li>
+        <li>
+          {to.label} is already selected. Change it on any row if you want something else.
+        </li>
+        <li>
+          {
+            to.lossy
+              ? "Pick a quality — Smallest, Balanced or Best. Balanced is a good default."
+              : "There is no quality setting, because " +
+                to.label +
+                " is lossless and there is nothing to trade."
+          }
+        </li>
+        <li>Press Convert, then Save. Nothing left your machine.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-semibold">Questions</h2>
+      <dl class="mt-4 flex flex-col gap-5">
+        {
+          faqs.map((f) => (
+            <div>
+              <dt class="font-medium">{f.q}</dt>
+              <dd class="mt-1 text-glass-600 dark:text-glass-400">{f.a}</dd>
+            </div>
+          ))
+        }
+      </dl>
+    </section>
+
+    <footer class="text-center text-sm text-glass-600 dark:text-glass-400">
+      <p>
+        <a href="/formats" class="hover:text-copper-500">All formats</a> ·
+        <a href="/why" class="hover:text-copper-500">Why this exists</a> ·
+        <a href="https://github.com/SirSicard/onhand" class="hover:text-copper-500">Source</a>
+      </p>
+      <p class="mt-2">MIT licensed. No accounts, no telemetry, no ads.</p>
+    </footer>
+  </main>
+
+  <script type="application/ld+json" set:html={JSON.stringify(faqSchema)} slot="head" />
+</Base>

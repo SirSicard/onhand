@@ -1,5 +1,5 @@
 import * as Comlink from "comlink";
-import { createWorkerHost } from "../workerHost";
+import { createWorkerHost, withStallTimeout } from "../workerHost";
 import { FORMATS, isAudioExtraction, type FormatId } from "../formats";
 import { ConversionError, type ConvertOptions, type Engine, type ProgressUpdate } from "../types";
 import type { MediaWorkerApi } from "../workers/media.worker";
@@ -26,6 +26,25 @@ const host = createWorkerHost<MediaWorkerApi>(
 export function resetMediaWorker(): void {
   host.reset();
 }
+
+/**
+ * How long a conversion may report no progress at all before we give up on it.
+ *
+ * WebCodecs can accept a job, report itself capable, and then simply never
+ * produce output. Measured on CI: every `tone.ogg` conversion sat at zero
+ * progress until the 90-second test timeout, on browsers that answer
+ * `canDecodeAudio("vorbis")` with `true`. Locally the same browsers convert it
+ * in milliseconds, so the capability check cannot be trusted as a promise —
+ * only as a hint.
+ *
+ * A stall detector rather than a total-time limit, deliberately: a 2 GB video
+ * legitimately takes minutes, but it never goes half a minute without a packet.
+ * Silence is the signal, not duration.
+ *
+ * Giving up here is cheap, because the broker simply falls through to ffmpeg
+ * and the user gets their file anyway.
+ */
+const STALL_MS = 30_000;
 
 const AV_KINDS = new Set(["audio", "video"]);
 
@@ -66,16 +85,30 @@ export const mediaEngine: Engine = {
 
     onProgress({ progress: 0 });
 
+    let watchdog: { tick: () => void; dispose: () => void } | undefined;
+
     try {
-      const { buffer } = await host.call((api) =>
+      const conversion = host.call((api) =>
         api.convert(
           file,
           target,
           effective,
           jobId,
-          Comlink.proxy((p: number | null) => onProgress({ progress: p })),
+          Comlink.proxy((p: number | null) => {
+            watchdog?.tick();
+            onProgress({ progress: p });
+          }),
         ),
       );
+
+      // Cancel the worker-side conversion on a stall so it stops holding
+      // memory, then let the broker fall through to ffmpeg.
+      const guarded = withStallTimeout(conversion, STALL_MS, () => {
+        void host.call((api) => api.cancel(jobId));
+      });
+      watchdog = guarded;
+
+      const { buffer } = await guarded.result;
       onProgress({ progress: 1 });
       return { blob: new Blob([buffer], { type: FORMATS[target].mime }) };
     } catch (cause) {
@@ -85,6 +118,12 @@ export const mediaEngine: Engine = {
       // "Not my job" is a routing signal, not a failure. It must stay a kind
       // the broker falls through on — throwing `unsupported` here would stop
       // the search and deny the user a conversion ffmpeg can do easily.
+      if (/stalled/i.test(message)) {
+        throw new ConversionError(
+          "internal",
+          `WebCodecs stalled on this file; falling back. (${message})`,
+        );
+      }
       if (err?.name === "NotMyJobError") {
         throw new ConversionError("internal", `WebCodecs cannot do this pair: ${message}`);
       }
@@ -109,6 +148,7 @@ export const mediaEngine: Engine = {
         { cause },
       );
     } finally {
+      watchdog?.dispose();
       signal?.removeEventListener("abort", onAbort);
     }
   },

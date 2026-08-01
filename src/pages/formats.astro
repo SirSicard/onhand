@@ -1,0 +1,146 @@
+---
+import Base from "../layouts/Base.astro";
+import { FORMATS, targetsFor, type Kind } from "../engine/formats";
+import { PAIRS, slugFor } from "../lib/pairs";
+
+/**
+ * The full capability matrix, generated from the engine's own table.
+ *
+ * Not hand-written, and that is the point. Every competitor publishes a format
+ * list as marketing copy, and a good half of the entries fail once you try
+ * them. This page cannot say something the engines don't do, because it is
+ * built from the same object the broker dispatches on.
+ */
+const KIND_ORDER: Kind[] = ["image", "audio", "video", "document"];
+const KIND_LABEL: Record<Kind, string> = {
+  image: "Images",
+  audio: "Audio",
+  video: "Video",
+  document: "Documents",
+};
+
+const byKind = KIND_ORDER.map((kind) => ({
+  kind,
+  formats: Object.values(FORMATS).filter((f) => f.kind === kind),
+}));
+
+const pairPages = new Map(PAIRS.map((p) => [`${p.source}>${p.target}`, slugFor(p)]));
+
+const totalPairs = Object.values(FORMATS).reduce((n, f) => n + targetsFor(f.id).length, 0);
+const readable = Object.values(FORMATS).filter((f) => f.decodable).length;
+const writable = Object.values(FORMATS).filter((f) => f.encodable).length;
+---
+
+<Base
+  title="Every format Onhand converts — generated from the engine | Onhand"
+  description={`${readable} formats in, ${writable} out, ${totalPairs} conversions. Generated from the conversion engine itself, so it cannot advertise something that doesn't work.`}
+>
+  <main class="mx-auto flex min-h-dvh max-w-3xl flex-col gap-10 px-6 py-16">
+    <header>
+      <nav class="mb-6 text-sm text-glass-600 dark:text-glass-400">
+        <a href="/" class="hover:text-copper-500">Onhand</a>
+      </nav>
+      <h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">Formats</h1>
+      <p class="mt-4 text-lg text-glass-600 dark:text-glass-400">
+        <strong>{readable} formats in, {writable} out, {totalPairs} conversions.</strong>
+      </p>
+      <p class="mt-3 text-glass-600 dark:text-glass-400">
+        This table is generated from the conversion engine at build time, not written by hand. It
+        cannot list a pair the engines don't actually perform — which is worth saying, because every
+        competitor's format list is marketing copy and a good half of the entries fail once you try
+        them.
+      </p>
+    </header>
+
+    {
+      byKind.map(({ kind, formats }) => (
+        <section>
+          <h2 class="text-xl font-semibold">{KIND_LABEL[kind]}</h2>
+          <div class="mt-4 overflow-x-auto">
+            <table class="w-full border-collapse text-sm">
+              <caption class="sr-only">{KIND_LABEL[kind]}: what each format converts to</caption>
+              <thead>
+                <tr class="border-b border-glass-200 text-left dark:border-glass-800">
+                  <th scope="col" class="py-2 pr-4 font-medium">
+                    From
+                  </th>
+                  <th scope="col" class="py-2 font-medium">
+                    To
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {formats.map((f) => {
+                  const targets = targetsFor(f.id);
+                  return (
+                    <tr class="border-b border-glass-200 align-top dark:border-glass-800">
+                      <th scope="row" class="py-3 pr-4 text-left font-medium whitespace-nowrap">
+                        {f.label}
+                        {!f.encodable && (
+                          <span
+                            class="ml-2 text-xs font-normal text-glass-600 dark:text-glass-400"
+                            title="Onhand reads this format but does not write it"
+                          >
+                            read only
+                          </span>
+                        )}
+                      </th>
+                      <td class="py-3 text-glass-600 dark:text-glass-400">
+                        {targets.map((t, i) => {
+                          const slug = pairPages.get(`${f.id}>${t.id}`);
+                          return (
+                            <>
+                              {i > 0 && <span aria-hidden="true"> · </span>}
+                              {slug ? (
+                                <a href={`/${slug}`} class="hover:text-copper-500">
+                                  {t.label}
+                                </a>
+                              ) : (
+                                <span>{t.label}</span>
+                              )}
+                            </>
+                          );
+                        })}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ))
+    }
+
+    <section>
+      <h2 class="text-xl font-semibold">What isn't here, and why</h2>
+      <ul class="mt-4 flex flex-col gap-3 text-glass-600 dark:text-glass-400">
+        <li>
+          <strong>HEIC out.</strong> Onhand reads HEIC and won't write it. The demand runs one direction:
+          people have thousands from an iPhone and want out, never in.
+        </li>
+        <li>
+          <strong>Office documents</strong> — DOCX, XLSX, PPTX. LibreOffice compiled to WebAssembly is
+          roughly a 250 MB download and unstable as of 2026. When that changes, this line changes.
+        </li>
+        <li>
+          <strong>Animated GIF.</strong> GIF decodes to its first frame. Animation needs frame handling
+          the image path doesn't do yet, and a converter that silently drops the animation is worse than
+          one that says it will.
+        </li>
+        <li>
+          <strong>AVI out.</strong> AVI reads but doesn't write. It's a container people escape, not one
+          they ask to be given.
+        </li>
+      </ul>
+    </section>
+
+    <footer class="text-center text-sm text-glass-600 dark:text-glass-400">
+      <p>
+        <a href="/" class="hover:text-copper-500">Convert something</a> ·
+        <a href="/why" class="hover:text-copper-500">Why this exists</a> ·
+        <a href="https://github.com/SirSicard/onhand" class="hover:text-copper-500">Source</a>
+      </p>
+    </footer>
+  </main>
+</Base>

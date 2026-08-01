@@ -480,3 +480,50 @@ instead, which is a stronger test than the audit was.)
 - CI now asserts the service worker shipped, is the generated one, and
   **precaches no codecs** — a shell that quietly grew to include a 10 MB wasm
   would pass every other check.
+
+## P5 — Pages and SEO (in progress) 2026-08-01
+
+**45 pair pages, /formats, /why, sitemap, robots.** Staying on
+`onhand.pages.dev` — no domain bought, so no SEO work is stranded by a later
+move.
+
+- **Pair pages are not a template with the nouns swapped.** Each carries its own
+  `reason` sentence, and the "what changes" facts are derived from the format
+  table — lossy versus lossless, whether the source is read-only, whether the
+  pair needs the 9.7 MB engine. Measured: **45 distinct lead paragraphs across
+  45 pages**, 46 distinct `<title>`s.
+- **`pairs.ts` is validated against the engine at build time.** A page cannot
+  exist for a pair the broker would refuse — which is the exact failure this
+  project criticises competitors for.
+- **The ranking is judgement, and says so.** No keyword tool here, so it is
+  derived from what is knowable: which formats people are trapped in (HEIC,
+  MOV), which pairs the incumbents surface in their own navigation, and which
+  are a real job rather than a curiosity.
+- **`/formats` is generated from the capability table**, so it physically cannot
+  advertise something that doesn't work, and it names what is missing and why.
+- **FAQPage schema is generated from the same array the page renders**, so it
+  can never mark up a question that isn't visible.
+
+### A real hang, found by CI and not reproducible locally
+
+Every `tone.ogg` conversion timed out at 90 s on CI while passing on this
+machine in milliseconds. Locally all three browsers report
+`canDecodeAudio("vorbis") === true` and mediabunny reports `isValid`, so the
+capability check is a hint, not a promise.
+
+Rather than chase a Linux-specific codec quirk, the fix is the one that holds
+regardless of cause: **a conversion must never hang forever.**
+`withStallTimeout` watches for _silence_ rather than duration — a 2 GB video
+legitimately takes minutes but never goes 30 s without a packet. On a stall it
+cancels the worker-side job and lets the broker fall through to ffmpeg, so the
+user still gets their file. Tested directly rather than by waiting.
+
+### Also fixed
+
+- **The browser tests needed `public/ffmpeg/`, which only the build hooks
+  create**, and CI runs tests before build. It passed locally the whole time on
+  a leftover artifact. `pretest:browser` now syncs it, verified from a clean
+  tree.
+- Removed the last `eslint-disable`: the offline effect closed over `jobs`
+  without declaring it. Reading the pairs back out of the key means the key is
+  the only dependency, which it always was.

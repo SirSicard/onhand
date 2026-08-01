@@ -38,6 +38,7 @@ const canonical = new URL(Astro.url.pathname, Astro.site).href;
     <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <!-- No preconnect, no font CDN, no analytics. COEP would block them and we
          do not want them: "zero external requests" is a load-bearing claim. -->
+    <slot name="head" />
   </head>
   <body>
     <slot />

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createWorkerHost } from "./workerHost";
+import { createWorkerHost, withStallTimeout } from "./workerHost";
 
 /**
  * The failure this exists to prevent: a worker dies while calls are in flight,
@@ -75,4 +75,44 @@ describe("createWorkerHost", () => {
     host.reset();
     await new Promise((r) => setTimeout(r, 10));
   }, 20_000);
+});
+
+describe("withStallTimeout", () => {
+  it("rejects when nothing reports progress", async () => {
+    // The CI failure this exists for: a conversion that accepts the job and
+    // then never produces output.
+    let cancelled = false;
+    const forever = new Promise<string>(() => {});
+    const { result } = withStallTimeout(forever, 200, () => {
+      cancelled = true;
+    });
+
+    await expect(result).rejects.toThrow(/stalled/i);
+    expect(cancelled, "should cancel the underlying work").toBe(true);
+  }, 10_000);
+
+  it("lets a slow job through as long as it keeps ticking", async () => {
+    // A 2 GB video legitimately takes minutes. It must not be killed for being
+    // slow, only for being silent — which is why this is a stall detector and
+    // not a time limit.
+    let done: (v: string) => void;
+    const slow = new Promise<string>((r) => (done = r));
+    const { result, tick } = withStallTimeout(slow, 200);
+
+    // Five stall windows' worth of elapsed time, with progress throughout.
+    for (let i = 0; i < 10; i++) {
+      await new Promise((r) => setTimeout(r, 100));
+      tick();
+    }
+    done!("finished");
+    await expect(result).resolves.toBe("finished");
+  }, 10_000);
+
+  it("stops its timer once settled, so it cannot fire later", async () => {
+    const { result } = withStallTimeout(Promise.resolve("ok"), 100);
+    await expect(result).resolves.toBe("ok");
+    // If the interval survived, this wait would produce an unhandled rejection
+    // and fail the run.
+    await new Promise((r) => setTimeout(r, 400));
+  }, 10_000);
 });

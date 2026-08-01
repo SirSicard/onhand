@@ -1,0 +1,167 @@
+---
+import Base from "../layouts/Base.astro";
+
+/**
+ * The manifesto page.
+ *
+ * Names the practices this product refuses, specifically enough that the claims
+ * are checkable. Vague ethics copy is worth nothing; "Zamzar allows two files a
+ * day" is worth something because you can go and verify it.
+ */
+---
+
+<Base
+  title="Why Onhand exists — the practices we refuse | Onhand"
+  description="Free converters upload your files because their architecture requires it. That architecture is why they meter, cap, ad-wall and email-gate you. Onhand has no server, so none of that is necessary."
+>
+  <main class="mx-auto flex min-h-dvh max-w-2xl flex-col gap-10 px-6 py-16">
+    <header>
+      <nav class="mb-6 text-sm text-glass-600 dark:text-glass-400">
+        <a href="/" class="hover:text-copper-500">Onhand</a>
+      </nav>
+      <h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">Why this exists</h1>
+      <p class="mt-4 text-lg text-glass-600 dark:text-glass-400">
+        Every free converter online has the same architecture, and almost every unpleasant thing
+        about them follows from it.
+      </p>
+    </header>
+
+    <section class="flex flex-col gap-4">
+      <p>
+        You upload the file. Their server converts it. You download the result. That means every
+        conversion costs them bandwidth, CPU time and storage — so they have to get that money back,
+        and the ways they do it are the ways these sites are annoying.
+      </p>
+      <p>
+        <strong>They are not being greedy.</strong> Given that architecture, metering is rational. The
+        problem is the architecture.
+      </p>
+      <p>
+        Browsers can run codecs now. WebAssembly and WebCodecs mean the conversion can happen on the
+        machine that already has the file, which costs the person running the site nothing per
+        conversion. Once that is true, none of the rest is necessary.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-semibold">What we refuse, and what it looks like elsewhere</h2>
+      <dl class="mt-5 flex flex-col gap-6">
+        <div>
+          <dt class="font-medium">Upload, then paywall</dt>
+          <dd class="mt-1 text-glass-600 dark:text-glass-400">
+            You wait for a 200 MB upload, watch a progress bar finish, and only then learn the
+            download needs a subscription. Your file is already on their server either way. Onhand
+            cannot do this: there is no upload step to hold anything hostage at.
+          </dd>
+        </div>
+        <div>
+          <dt class="font-medium">Fake queues and invented waiting</dt>
+          <dd class="mt-1 text-glass-600 dark:text-glass-400">
+            A spinner that takes thirty seconds for a job that took two, because the wait is what
+            makes the paid tier look worth it. Onhand's progress bars are read from the encoder.
+            When a codec genuinely can't report progress, you get an indeterminate spinner rather
+            than a number we made up — there is a comment in the source saying exactly that, because
+            it was tempting.
+          </dd>
+        </div>
+        <div>
+          <dt class="font-medium">Email gates</dt>
+          <dd class="mt-1 text-glass-600 dark:text-glass-400">
+            "Enter your email and we'll send you the link." Your file was the product; your address
+            is the price. There is no field to type an address into here.
+          </dd>
+        </div>
+        <div>
+          <dt class="font-medium">Daily limits and size caps</dt>
+          <dd class="mt-1 text-glass-600 dark:text-glass-400">
+            Convertio caps free files at 100 MB. Zamzar allows 50 MB and two files a day.
+            CloudConvert charges by the minute. All rational responses to paying for server time.
+            Onhand's only limit is your own machine's memory, and it tells you the number before it
+            starts rather than failing halfway through.
+          </dd>
+        </div>
+        <div>
+          <dt class="font-medium">Format lists that are marketing copy</dt>
+          <dd class="mt-1 text-glass-600 dark:text-glass-400">
+            Long grids of formats where a good fraction silently fail or produce something broken.
+            Onhand's
+            <a href="/formats" class="text-copper-700 hover:underline dark:text-copper-400">
+              format table
+            </a>
+            is generated from the conversion engine at build time. It physically cannot list a pair the
+            code doesn't perform.
+          </dd>
+        </div>
+        <div>
+          <dt class="font-medium">Analytics on a privacy tool</dt>
+          <dd class="mt-1 text-glass-600 dark:text-glass-400">
+            No telemetry, no crash reporting, no cookies, no accounts — not "anonymised", absent.
+            The build fails if an external URL appears in the output, and the page sets a header
+            that would block third-party resources even if we wanted them.
+          </dd>
+        </div>
+      </dl>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-semibold">Don't take our word for it</h2>
+      <ul class="mt-4 flex flex-col gap-3 text-glass-600 dark:text-glass-400">
+        <li>
+          The header shows <strong class="font-mono">↑ 0 bytes uploaded</strong> while you work. It wraps
+          <code>fetch</code>, <code>XMLHttpRequest</code> and
+          <code>sendBeacon</code> and counts bytes this page actually sends.
+        </li>
+        <li>Open DevTools → Network and convert something. Nothing outbound carries a body.</li>
+        <li>
+          Turn off your wifi. After one visit it still converts, because the codecs are cached on
+          your machine.
+        </li>
+        <li>
+          <a
+            href="https://github.com/SirSicard/onhand"
+            class="text-copper-700 hover:underline dark:text-copper-400">Read the source.</a
+          > It's MIT, and it is the whole thing.
+        </li>
+      </ul>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-semibold">Credit where it's due</h2>
+      <p class="mt-3 text-glass-600 dark:text-glass-400">
+        <a href="https://vert.sh" class="text-copper-700 hover:underline dark:text-copper-400"
+          >VERT.sh</a
+        > got here first and is open source, good, and worth your time. Its own tagline says "fully local*",
+        and the asterisk is video — that routes to a server. Onhand's bet is that WebCodecs is now good
+        enough that the asterisk doesn't have to exist. If you prefer theirs, use theirs; the point was
+        never to be the only one.
+      </p>
+    </section>
+
+    <section>
+      <h2 class="text-xl font-semibold">What this costs us</h2>
+      <p class="mt-3 text-glass-600 dark:text-glass-400">
+        Honesty about the trade: doing everything on your machine means your machine has to be able
+        to do it. A browser tab has roughly 1.8 GB of working memory, so very large video is refused
+        rather than half-converted. Some conversions need a 9.7 MB engine downloaded once. Firefox
+        lacks an AAC encoder, so some video takes seconds there instead of milliseconds.
+      </p>
+      <p class="mt-3 text-glass-600 dark:text-glass-400">
+        Those are real limits and they are on the
+        <a href="/formats" class="text-copper-700 hover:underline dark:text-copper-400">
+          formats page
+        </a>
+        and in the README rather than hidden. A tool that overstates what it can do is just a slower way
+        of wasting your afternoon.
+      </p>
+    </section>
+
+    <footer class="text-center text-sm text-glass-600 dark:text-glass-400">
+      <p>
+        <a href="/" class="hover:text-copper-500">Convert something</a> ·
+        <a href="/formats" class="hover:text-copper-500">All formats</a> ·
+        <a href="https://github.com/SirSicard/onhand" class="hover:text-copper-500">Source</a>
+      </p>
+      <p class="mt-2">MIT licensed. No accounts, no telemetry, no ads.</p>
+    </footer>
+  </main>
+</Base>
