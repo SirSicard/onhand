@@ -29,3 +29,6 @@ pnpm-debug.log*
 public/ffmpeg/
 src/**/__screenshots__/
 test-results/
+
+# scratch frames from scripts/make-airplane-gif.mjs
+.airplane-frames/

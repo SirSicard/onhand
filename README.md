@@ -25,6 +25,16 @@ Onhand doesn't have that cost, because there is no server. WebAssembly and
 WebCodecs run the codecs in your tab, on your silicon. "Free" isn't a
 promotional tier that gets squeezed later — it's just what the thing costs.
 
+<p align="center">
+  <img src="docs/media/airplane-mode.gif" alt="Onhand converting a HEIC to JPEG with the network switched off: navigator.onLine reads false, the page reloads from cache, and the conversion completes with the counter still reading zero bytes uploaded" width="900">
+</p>
+
+<p align="center">
+  <sub>Not a mock-up. Chromium's network stack is switched off partway through —
+  <code>navigator.onLine = false</code> is on camera — and the conversion runs anyway.
+  Recorded by <a href="scripts/make-airplane-gif.mjs"><code>pnpm airplane</code></a>.</sub>
+</p>
+
 ## How you can check we mean it
 
 - A live **`↑ 0 bytes uploaded`** counter runs in the header while you convert.
