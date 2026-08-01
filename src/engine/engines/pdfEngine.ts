@@ -1,4 +1,5 @@
 import * as Comlink from "comlink";
+import { zipSync } from "fflate";
 import { FORMATS, type FormatId } from "../formats";
 import { ConversionError, type ConvertOptions, type Engine, type ProgressUpdate } from "../types";
 import type { PdfWorkerApi } from "../workers/pdf.worker";
@@ -20,6 +21,10 @@ function getWorker() {
     const worker = new Worker(new URL("../workers/pdf.worker.ts", import.meta.url), {
       type: "module",
       name: "onhand-pdf",
+    });
+    worker.addEventListener("error", () => {
+      if (handle?.worker === worker) handle = null;
+      worker.terminate();
     });
     handle = { worker, api: Comlink.wrap<PdfWorkerApi>(worker) };
   }
@@ -99,7 +104,10 @@ export const pdfEngine: Engine = {
 
         // Multi-page → zip. Losing pages 2..n silently would be a data-loss bug
         // dressed up as a feature.
-        const { zipSync } = await import("fflate");
+        //
+        // fflate is imported statically: it is ~10 KB, this engine is already
+        // lazy-loaded, and the dynamic import bought nothing while adding a
+        // failure mode (dep-optimiser races in both Vite dev and vitest).
         const stem = file.name.replace(/\.pdf$/i, "");
         const entries: Record<string, Uint8Array> = {};
         for (const page of encoded) {
@@ -130,7 +138,9 @@ export const pdfEngine: Engine = {
       onProgress({ progress: 1 });
       return { blob: new Blob([out], { type: "application/pdf" }) };
     } catch (cause) {
-      resetPdfWorker();
+      // Not resetting the worker: it is shared, and terminating it because one
+      // PDF was malformed strands every concurrent job (they never settle).
+      // See imageEngine for the measured failure this prevents.
       if (cause instanceof ConversionError) throw cause;
 
       const message = cause instanceof Error ? cause.message : String(cause);

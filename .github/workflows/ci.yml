@@ -30,8 +30,18 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
-      - name: Test
+      - name: Test (node)
         run: pnpm test
+
+      - name: Install browsers
+        run: pnpm exec playwright install --with-deps chromium firefox webkit
+
+      # The conversion matrix needs real wasm codecs, so it needs real browsers.
+      # All three, because the differences between them are the entire point:
+      # Chromium refuses SVG blobs to createImageBitmap, neither Chromium nor
+      # Firefox decodes HEIC, and codec profile support varies per engine.
+      - name: Test (browsers)
+        run: pnpm test:browser:all
 
       - name: Build
         run: pnpm build

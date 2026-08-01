@@ -16,7 +16,10 @@
     "typecheck": "astro check && tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "prettier --check ."
+    "lint": "prettier --check .",
+    "test:browser": "vitest run --config vitest.browser.config.ts",
+    "test:browser:all": "ONHAND_ALL_BROWSERS=1 vitest run --config vitest.browser.config.ts",
+    "test:all": "pnpm test && pnpm test:browser"
   },
   "dependencies": {
     "@astrojs/react": "^4.4.0",
@@ -43,6 +46,8 @@
     "@types/node": "^26.1.2",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "@vitest/browser": "^3.2.7",
+    "playwright": "^1.62.1",
     "prettier": "^3.6.0",
     "prettier-plugin-astro": "^0.14.1",
     "tailwindcss": "^4.1.0",

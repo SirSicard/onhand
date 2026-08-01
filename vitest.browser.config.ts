@@ -1,0 +1,82 @@
+import { defineConfig } from "vitest/config";
+import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
+
+/**
+ * Browser-mode suite: the real conversion matrix.
+ *
+ * These tests cannot run in node. wasm codecs, OffscreenCanvas, createImageBitmap
+ * and WebCodecs all need a genuine browser, and mocking them would test the mocks.
+ *
+ *   pnpm test:browser              # chromium
+ *   pnpm test:browser:all          # chromium, firefox, webkit
+ *
+ * Cross-origin isolation is set here too, matching production. Without it
+ * SharedArrayBuffer is unavailable and any multithread path silently disappears —
+ * a test suite that runs un-isolated would pass while testing a different
+ * configuration from the one users get.
+ */
+export default defineConfig({
+  plugins: [
+    {
+      // Same dev-only fixture route as astro.config, so browser tests fetch real
+      // bytes rather than an HTML fallback that fails like a broken codec.
+      name: "onhand:fixtures",
+      configureServer(server) {
+        server.middlewares.use("/fixtures", (req, res, next) => {
+          const name = decodeURIComponent((req.url ?? "").split("?")[0] ?? "").replace(/^\//, "");
+          if (!name || name.includes("/") || name.includes("..")) return next();
+          try {
+            const data = readFileSync(fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url)));
+            res.setHeader("content-type", "application/octet-stream");
+            res.setHeader("cache-control", "no-store");
+            res.end(data);
+          } catch {
+            res.statusCode = 404;
+            res.setHeader("content-type", "text/plain");
+            res.end(`fixture not found: ${name}`);
+          }
+        });
+      },
+    },
+  ],
+  server: {
+    headers: {
+      "Cross-Origin-Opener-Policy": "same-origin",
+      "Cross-Origin-Embedder-Policy": "require-corp",
+    },
+  },
+  optimizeDeps: {
+    // Same rule as production: wasm codec packages must not be pre-bundled or
+    // their relative .wasm paths break. utif is pure JS and must NOT be here.
+    exclude: [
+      "@jsquash/jpeg",
+      "@jsquash/png",
+      "@jsquash/webp",
+      "@jsquash/avif",
+      "@jsquash/resize",
+      "@jsquash/oxipng",
+      "libheif-js",
+      "@resvg/resvg-wasm",
+    ],
+  },
+  test: {
+    include: ["src/**/*.browser.test.ts"],
+    testTimeout: 60_000, // wasm codecs load slowly on the first test
+    browser: {
+      enabled: true,
+      provider: "playwright",
+      headless: true,
+      // One browser by default (fast inner loop); all three in CI and before a
+      // release, because the codec differences between them are the entire
+      // reason this suite exists — Chromium refuses SVG blobs, Firefox has no
+      // AAC encoder, Safari decodes HEIC natively while the others cannot.
+      instances: process.env.ONHAND_ALL_BROWSERS
+        ? [{ browser: "chromium" }, { browser: "firefox" }, { browser: "webkit" }]
+        : [{ browser: "chromium" }],
+    },
+  },
+  resolve: {
+    alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
+  },
+});

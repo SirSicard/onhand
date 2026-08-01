@@ -205,3 +205,24 @@ us nothing and lies to no one.
   (64 KB) ship to production; the corpus stays in fixtures/.
 - 2026-08-01: EXIF orientation is honoured — `rotated-exif.jpg` (orientation 6, 640x480)
   correctly outputs 480x640. createImageBitmap applies it; do not "fix" this.
+
+### P1 close-out
+- 2026-08-01: PDF both directions. pdf.js v6 REQUIRES `GlobalWorkerOptions.workerSrc`
+  — setting it to "" throws rather than running inline; point it at the bundled
+  worker via `?url`. PDFs render onto transparent canvas (comes out black) so fill
+  white first; render at scale 2.0 or text is mush. Multi-page → zip, and engines can
+  now override the output filename because naming a zip ".png" misleads the OS.
+- 2026-08-01: Dev-only `/fixtures/*` route added (astro.config + vitest.browser.config).
+  Fixtures live outside public/, so fetching one returned index.html and a "JPEG" that
+  is 4,311 bytes of HTML fails exactly like a broken codec. Cost ~40 min across two
+  incidents. The route 404s loudly in plain text instead. Test helpers check for
+  `<!doctype html`, NOT for a leading `<` — SVG legitimately starts with `<`.
+- 2026-08-01: **Shared-worker hazard, found by the batch test.** Both engines called
+  `resetWorker()` in their catch block. The worker is shared across concurrent jobs,
+  so one corrupt file terminated it and every in-flight conversion never settled — a
+  5-file batch with 2 bad files HUNG for 60s instead of finishing in <1s with 3
+  successes. Codec errors are normal and leave the worker healthy; only a
+  worker-level `error` event justifies discarding the instance. Fixed in both engines.
+- 2026-08-01: Browser-mode suite added. **264 tests green across Chromium, Firefox and
+  WebKit** — full matrix, quality monotonicity, PDF both ways, 50-file batch (worst
+  main-thread block < 400ms), and batch resilience. Wired into CI.

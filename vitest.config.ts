@@ -10,6 +10,11 @@ export default defineConfig({
     globals: true,
     environment: "node",
     include: ["src/**/*.test.ts"],
+    // `*.browser.test.ts` also matches the glob above, and in node those tests
+    // fail for the wrong reason ("Failed to parse URL from /fixtures/...") — the
+    // relative fetch has no origin, and crossOriginIsolated is undefined. They
+    // belong to vitest.browser.config.ts; run them with `pnpm test:browser`.
+    exclude: ["**/node_modules/**", "**/dist/**", "src/**/*.browser.test.ts"],
   },
   resolve: {
     alias: {
