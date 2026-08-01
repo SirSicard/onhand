@@ -1,0 +1,6 @@
+# pnpm 11 gates package postinstall scripts individually. Both of these ship
+# platform-specific binaries and are required: esbuild backs Vite, sharp backs
+# Astro's asset pipeline. Reviewed and allowed deliberately.
+allowBuilds:
+  esbuild: true
+  sharp: true

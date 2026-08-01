@@ -1,0 +1,36 @@
+---
+import Base from "../layouts/Base.astro";
+import EnvironmentReport from "../components/EnvironmentReport";
+---
+
+<Base
+  title="Alembic — convert any file, nothing uploaded"
+  description="Free file converter that runs entirely in your browser. Images, audio and video — including video — converted on your own device. Nothing is ever uploaded."
+>
+  <main class="mx-auto flex min-h-dvh max-w-3xl flex-col items-center justify-center gap-10 px-6 py-16">
+    <header class="text-center">
+      <h1 class="text-4xl font-semibold tracking-tight sm:text-5xl">Alembic</h1>
+      <p class="mt-4 text-lg text-glass-600 dark:text-glass-400">
+        Every file converter on one page.<br />
+        Nothing is ever uploaded — <em>including video</em>.
+      </p>
+    </header>
+
+    <section
+      class="w-full rounded-xl border border-glass-200 bg-white/60 p-6 dark:border-glass-800 dark:bg-glass-900/60"
+    >
+      <h2 class="mb-4 text-sm font-semibold uppercase tracking-wide text-glass-400">
+        This browser
+      </h2>
+      <EnvironmentReport client:load />
+    </section>
+
+    <footer class="text-center text-sm text-glass-400">
+      <p>
+        Groundwork only — the converter itself lands next.
+        <br />
+        MIT licensed. No accounts, no telemetry, no ads.
+      </p>
+    </footer>
+  </main>
+</Base>

@@ -1,0 +1,26 @@
+# Cloudflare Pages headers.
+#
+# COOP + COEP put the page in the cross-origin isolated state, which is what
+# unlocks SharedArrayBuffer (multithreaded ffmpeg.wasm) and high-resolution
+# timers. Without both of these, crossOriginIsolated === false and the mt path
+# silently never engages.
+#
+# The cost: every cross-origin subresource must send CORP or be CORS-loaded.
+# We deliberately embed nothing third-party — fonts are self-hosted, there is no
+# analytics, no CDN, no external anything — so this costs us nothing and is also
+# the marketing claim. Keep it that way (SPEC §2).
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Permissions-Policy: geolocation=(), microphone=(), camera=(), interest-cohort=()
+
+# Content-hashed build output — safe to cache forever.
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Codec wasm binaries are large and versioned by path; cache hard so the 31 MB
+# ffmpeg core is fetched exactly once per user, ever.
+/codecs/*
+  Cache-Control: public, max-age=31536000, immutable

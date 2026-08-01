@@ -1,0 +1,65 @@
+/* Tailwind v4 is CSS-first. There is NO tailwind.config.js and there must not be —
+   the config lives here in @theme. (Adding one is the single most common way to
+   break a v4 setup; it was the first build failure on the last project.) */
+@import "tailwindcss";
+
+@theme {
+  /* Alembic: the alchemist's still. Warm copper on cold glass. */
+  --color-glass-50: #f6f7f9;
+  --color-glass-100: #eceef2;
+  --color-glass-200: #d5dae2;
+  --color-glass-400: #8e99ab;
+  --color-glass-600: #4d5769;
+  --color-glass-800: #262d3a;
+  --color-glass-900: #171c26;
+  --color-glass-950: #0e121a;
+
+  --color-copper-300: #e8b48a;
+  --color-copper-400: #dc9a63;
+  --color-copper-500: #c87d42;
+  --color-copper-600: #a86233;
+
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  font-family: var(--font-sans);
+  background: var(--color-glass-50);
+  color: var(--color-glass-900);
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background: var(--color-glass-950);
+    color: var(--color-glass-100);
+  }
+}
+
+/* Honour the OS setting rather than animating over it. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-copper-500);
+  outline-offset: 2px;
+}

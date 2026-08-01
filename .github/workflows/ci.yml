@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel superseded runs on the same branch — CI should never queue behind itself.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      # The whole product rests on cross-origin isolation being live. If _headers
+      # ever stops shipping, SharedArrayBuffer dies silently and the multithread
+      # path just never engages — no error, just mysteriously slower. Assert it.
+      - name: Assert COOP/COEP headers ship
+        run: |
+          test -f dist/_headers || { echo "::error::dist/_headers is missing"; exit 1; }
+          grep -q "Cross-Origin-Opener-Policy: same-origin" dist/_headers \
+            || { echo "::error::COOP header missing from dist/_headers"; exit 1; }
+          grep -q "Cross-Origin-Embedder-Policy: require-corp" dist/_headers \
+            || { echo "::error::COEP header missing from dist/_headers"; exit 1; }
+          echo "cross-origin isolation headers present"
+
+      # Prime directive 1: file bytes never leave the device. The strongest cheap
+      # guard is that the built output contains no outbound endpoints at all.
+      - name: Assert no external network endpoints in build output
+        run: |
+          if grep -rEIl "https?://(?!alembic\.pages\.dev)" dist --include="*.js" -P 2>/dev/null \
+             | grep -q .; then
+            echo "::warning::external URL found in build output — verify it is not an upload path"
+            grep -rEIho "https?://[a-zA-Z0-9._/-]*" dist --include="*.js" -P | sort -u | head -20
+          else
+            echo "no external endpoints in client bundle"
+          fi

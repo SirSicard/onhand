@@ -1,0 +1,28 @@
+# build output
+dist/
+.astro/
+
+# deps
+node_modules/
+
+# env
+.env
+.env.production
+.dev.vars
+
+# macOS
+.DS_Store
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# editors
+.vscode/
+.idea/
+
+# test artifacts
+coverage/
+test-results/
+playwright-report/
