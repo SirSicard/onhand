@@ -187,9 +187,11 @@ export const FORMATS: Record<FormatId, FormatSpec> = {
   // control appears. WAV and FLAC get no slider because there is nothing to
   // trade — showing one would imply a choice that does not exist.
   mp3: {
-    // No browser has an MP3 *encoder* in WebCodecs — not one. Every "convert to
-    // mp3" job therefore goes through ffmpeg, which is precisely why the ffmpeg
-    // engine is not optional despite being 32 MB.
+    // Most browsers have no MP3 *encoder* in WebCodecs, so "convert to mp3"
+    // usually goes through ffmpeg — which is why that engine is not optional.
+    // Not universal, though: some Linux WebKit builds are GStreamer-backed and
+    // do encode MP3, and the routing picks that up on its own. A hardcoded
+    // "nobody can" was wrong within a day of being written.
     id: "mp3",
     label: "MP3",
     kind: "audio",

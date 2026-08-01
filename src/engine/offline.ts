@@ -47,7 +47,7 @@ const ENCODE_ASSETS: Partial<Record<FormatId, string[]>> = {
 };
 
 /**
- * Audio and video that no browser can encode must go through ffmpeg, and that
+ * Audio and video most browsers cannot encode go through ffmpeg, and that
  * is the 9.7 MB download. Anything else on those kinds uses WebCodecs and needs
  * nothing cached beyond the shell.
  */

@@ -17,6 +17,25 @@ import EnvironmentReport from "../components/EnvironmentReport";
       </p>
     </header>
 
+    {
+      /*
+      When the service worker cannot reach the network it falls back to this
+      page for ANY navigation, including a pair page the visitor has never
+      opened. The converter still works, which is the point — but the address
+      bar says /heic-to-jpg/ while this renders, and silently showing the wrong
+      page is worse than saying so.
+    */
+    }
+    <p
+      id="offline-fallback"
+      hidden
+      class="rounded-lg border border-glass-200 px-3 py-2 text-sm text-glass-600 dark:border-glass-800 dark:text-glass-400"
+      role="status"
+    >
+      You're offline and haven't opened that page before, so this is the main converter instead. It
+      works exactly the same — pick your format below.
+    </p>
+
     <Converter client:load />
 
     <details class="rounded-xl border border-glass-200 p-4 dark:border-glass-800">
@@ -38,4 +57,11 @@ import EnvironmentReport from "../components/EnvironmentReport";
       </p>
     </footer>
   </main>
+
+  <script>
+    // Runs only in the fallback case: this document served at some other URL.
+    if (location.pathname !== "/" && location.pathname !== "/index.html") {
+      document.getElementById("offline-fallback")?.removeAttribute("hidden");
+    }
+  </script>
 </Base>

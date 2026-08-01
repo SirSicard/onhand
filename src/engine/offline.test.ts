@@ -30,7 +30,7 @@ describe("assetsForPair", () => {
     }
   });
 
-  it("does demand it for the pairs no browser can encode", () => {
+  it("does demand it for the pairs most browsers cannot encode", () => {
     // The inverse failure, and the worse one: promising offline capability for
     // a pair that will hit the network for 9.7 MB.
     expect(assetsForPair("wav", "mp3").join(" ")).toMatch(/ffmpeg/);

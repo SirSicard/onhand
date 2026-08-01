@@ -9,7 +9,8 @@ import type { MediaWorkerApi } from "../workers/media.worker";
  *
  * Preferred over ffmpeg wherever it works: it uses the browser's own codecs
  * (usually hardware-accelerated), needs no 32 MB download, and gives real
- * progress. It cannot do everything — no browser encodes MP3 or Vorbis, and
+ * progress. It cannot do everything — most browsers encode neither MP3 nor
+ * Vorbis (though Firefox does Vorbis, and some Linux WebKit builds do MP3), and
  * Firefox has no AAC encoder — so the broker falls through to ffmpeg when this
  * engine says the job isn't its.
  */

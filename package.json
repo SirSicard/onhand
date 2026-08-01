@@ -28,7 +28,8 @@
     "postbuild": "node scripts/build-sw.mjs",
     "og": "node scripts/make-og.mjs",
     "pretest:browser": "node scripts/sync-ffmpeg-core.mjs",
-    "pretest:browser:all": "node scripts/sync-ffmpeg-core.mjs"
+    "pretest:browser:all": "node scripts/sync-ffmpeg-core.mjs",
+    "verify:live": "node scripts/verify-live.mjs"
   },
   "dependencies": {
     "@astrojs/react": "^4.4.0",

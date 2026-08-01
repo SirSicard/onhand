@@ -111,6 +111,44 @@ describe("queue mechanics", () => {
   });
 });
 
+describe("queue concurrency", () => {
+  it("honours the limit it advertises, rather than firing everything at once", async () => {
+    // maxConcurrency existed from the start and was only ever DISPLAYED: the
+    // diagnostics panel said "3 at a time" while runAll fired every job
+    // simultaneously. On a 2-core CI runner that meant a ten-file batch
+    // finishing seven, because each job holds a wasm instance and they starve
+    // one another.
+    const { maxConcurrency, probeCapabilities } = await import("@/engine/capabilities");
+    const limit = maxConcurrency(await probeCapabilities());
+
+    render();
+    addFiles(Array.from({ length: 8 }, (_, i) => pngFile(`c${i}.png`)));
+
+    // Count rows that are simultaneously mid-conversion.
+    let peak = 0;
+    const observer = new MutationObserver(() => {
+      const running = rows().filter((li) => /Converting|%$/.test(li.textContent ?? "")).length;
+      peak = Math.max(peak, running);
+    });
+    observer.observe(container, { subtree: true, childList: true, characterData: true });
+
+    const btn = buttonNamed(/^Convert/)!;
+    await act(async () => {
+      btn.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    for (let i = 0; i < 40; i++) {
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 100));
+      });
+      if ((container.textContent?.match(/→/g)?.length ?? 0) >= 8) break;
+    }
+    observer.disconnect();
+
+    expect(container.textContent?.match(/→/g)?.length, "all eight should finish").toBe(8);
+    expect(peak, `saw ${peak} running at once, limit is ${limit}`).toBeLessThanOrEqual(limit);
+  }, 120_000);
+});
+
 describe("the upload counter", () => {
   it("reads zero, which is the entire promise", () => {
     render();

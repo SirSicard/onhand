@@ -7,7 +7,7 @@ import { ConversionError, type ConvertOptions, type Engine, type ProgressUpdate 
  * The universal fallback: ffmpeg compiled to wasm.
  *
  * Slower than WebCodecs and a 32 MB one-time download, but it can do the things
- * no browser can — encode MP3 and Vorbis, read AVI and every other legacy
+ * most browsers cannot — encode MP3 and Vorbis, read AVI and every other legacy
  * container, build animated GIFs with a proper palette. It runs in its own
  * worker (FFmpeg spawns one internally), so this module stays on the main
  * thread and never blocks it with codec work.
@@ -432,7 +432,21 @@ export const ffmpegEngine: Engine = {
 
       if (signal?.aborted) throw new ConversionError("internal", "Cancelled");
 
-      if (/memory|allocation|abort|OOM/i.test(message)) {
+      // "Out of memory" is a specific claim and must be earned. ffmpeg.wasm
+      // says "Aborted()" for almost any internal failure, so matching /abort/
+      // told a user their 10 KB Ogg file was too large to convert — measured on
+      // CI, and it is the kind of message that makes someone give up on a tool
+      // that was one fallback away from working.
+      //
+      // Two conditions now: the message has to name memory specifically, AND
+      // the input has to be big enough for that to be plausible. Below the
+      // threshold, whatever went wrong was not memory.
+      const namesMemory = /out of memory|oom|allocation failed|memory access out of bounds/i.test(
+        message,
+      );
+      const plausiblySized = file.size > 64 * 1024 * 1024;
+
+      if (namesMemory && plausiblySized) {
         // An OOM inside wasm leaves the instance unusable, so this is the one
         // case that genuinely warrants discarding it.
         resetFfmpeg();
@@ -446,10 +460,20 @@ export const ffmpegEngine: Engine = {
           },
         );
       }
+      // An abort leaves the wasm instance in an unknown state even when it was
+      // not memory, so discard it — but say what actually happened rather than
+      // inventing a cause.
+      if (/abort/i.test(message)) resetFfmpeg();
+
       throw new ConversionError(
         "internal",
         `Converting ${FORMATS[source].label} to ${FORMATS[target].label} failed.`,
-        { cause: new Error(lastLog || message) },
+        {
+          suggestion: lastLog
+            ? undefined
+            : "This looks like a problem on our side rather than with your file.",
+          cause: new Error(lastLog || message),
+        },
       );
     } finally {
       signal?.removeEventListener("abort", onAbort);

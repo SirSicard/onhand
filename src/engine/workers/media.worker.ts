@@ -60,12 +60,13 @@ const CONTAINERS: Partial<
 
   m4a: { format: () => new Mp4OutputFormat(), audio: "aac" },
   aac: { format: () => new AdtsOutputFormat(), audio: "aac" },
-  // No browser has an MP3 encoder, so this entry exists to be rejected by
-  // canEncodeAudio and routed to ffmpeg. Declaring it anyway keeps the routing
-  // in one place instead of in a hardcoded exception somewhere else.
+  // Most browsers have no MP3 encoder, so this entry is usually rejected by
+  // canEncodeAudio and routed to ffmpeg — but some (GStreamer-backed WebKit)
+  // accept it, and then this path is used and is much faster. Declaring the
+  // codec and asking at runtime is exactly why that works without a change.
   mp3: { format: () => new Mp3OutputFormat(), audio: "mp3" },
-  // Likewise Vorbis, which nothing encodes natively — .ogg therefore means
-  // ffmpeg. Opus gets its own entry because that one WebCodecs can do.
+  // Vorbis: Firefox encodes it, Chrome and Safari do not, so .ogg goes
+  // whichever way the browser allows. Opus is widely supported.
   ogg: { format: () => new OggOutputFormat(), audio: "vorbis" },
   opus: { format: () => new OggOutputFormat(), audio: "opus" },
   flac: { format: () => new FlacOutputFormat(), audio: "flac" },

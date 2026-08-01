@@ -568,3 +568,46 @@ gzipped ffmpeg core.
 
 **Lighthouse across all four page types** (home, pair, formats, why):
 perf 96–100, accessibility 100, best-practices 100, SEO 100.
+
+## Closing the CI-only failures — 2026-08-01
+
+Four failures that never reproduced locally. Each turned out to be a real
+defect, not an environment quirk.
+
+**The queue ignored its own concurrency limit.** `maxConcurrency` was written in
+P0 and only ever _displayed_ — the diagnostics panel told people "3 at a time"
+while `runAll` fired every job simultaneously. On 18 cores that is merely untrue;
+on a 2-core runner with three browsers competing it is a ten-file batch
+finishing seven, because each job holds a wasm instance and they starve each
+other. Now a worker pool pulling from a shared cursor, with a test that counts
+concurrent in-flight rows and fails if the advertised limit is exceeded.
+
+**A 10 KB file was reported as "too large to convert".** ffmpeg.wasm says
+"Aborted()" for almost any internal failure, and the error classifier matched
+`/abort/`. Claiming a file is too large now requires two things: a message that
+names memory specifically, _and_ an input over 64 MB. Below that, whatever went
+wrong was not memory — and telling someone to trim a 10 KB file is the kind of
+message that makes them give up on a tool that was one fallback away from
+working.
+
+**A test asserted a belief rather than behaviour.** "Uses ffmpeg for MP3,
+because no browser can encode it" failed on Linux WebKit, which is
+GStreamer-backed and genuinely _does_ encode MP3 — so the WebCodecs path
+correctly won and the test was wrong. It now asserts the output is a real MP3
+and records which engine ran, the same pattern as `mov → mp4`.
+
+**The claim was in the prose too, in six places**, including the README section
+that sells the routing. Firefox encodes Vorbis; some Linux WebKit builds encode
+MP3. Corrected everywhere. The capability-based routing was right all along —
+it takes the fast path wherever one exists, with no code change — and the
+overstatement undersold it.
+
+Also: an offline visit to a pair page that was never cached serves the homepage
+at that URL. The converter works, so the fallback stays, but the page now says
+what happened instead of silently looking wrong. And `pnpm verify:live` exists
+because production lied twice in ways that looked like real bugs — the alias
+lags a deploy by a minute or two, and Cloudflare answers a _missing_ asset with
+its 404 page and HTTP 200, so the script polls and asserts content types rather
+than status codes.
+
+**540 browser tests across Chromium, Firefox and WebKit. All green.**

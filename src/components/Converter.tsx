@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { convert } from "@/engine/broker";
+import { maxConcurrency, probeCapabilities } from "@/engine/capabilities";
 import { FORMATS, detectFormat, targetsFor, type FormatId } from "@/engine/formats";
 import { ConversionError, newJobId, type ConvertOptions, type Job } from "@/engine/types";
 import { installUploadMonitor, getSentBytes, onSentBytesChange } from "@/engine/uploadMonitor";
@@ -190,10 +191,32 @@ export default function Converter({ initialTarget }: { initialTarget?: FormatId 
     [optionsFor, update],
   );
 
-  const runAll = useCallback(() => {
-    for (const job of jobs) {
-      if (job.status === "queued" || job.status === "failed") void runJob(job);
-    }
+  /**
+   * Run the queue N at a time rather than all at once.
+   *
+   * `maxConcurrency` existed from the start and was only ever *displayed* — the
+   * diagnostics panel told people "3 at a time" while this fired every job
+   * simultaneously. On a fast machine that is merely untrue; on a 2-core one it
+   * is a mixed batch of ten files finishing seven of them, because each job
+   * holds a wasm instance and they starve each other.
+   *
+   * A pool of workers pulling from a shared cursor, so a slow file delays only
+   * itself rather than a whole batch boundary.
+   */
+  const runAll = useCallback(async () => {
+    const queue = jobs.filter((j) => j.status === "queued" || j.status === "failed");
+    if (queue.length === 0) return;
+
+    const limit = maxConcurrency(await probeCapabilities());
+    let cursor = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(limit, queue.length) }, async () => {
+        while (cursor < queue.length) {
+          const job = queue[cursor++];
+          if (job) await runJob(job);
+        }
+      }),
+    );
   }, [jobs, runJob]);
 
   const cancel = useCallback((id: string) => {
@@ -417,7 +440,7 @@ export default function Converter({ initialTarget }: { initialTarget?: FormatId 
             )}
 
             <button
-              onClick={runAll}
+              onClick={() => void runAll()}
               disabled={!pending}
               className="rounded-lg bg-copper-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
             >

@@ -51,7 +51,7 @@ if (pair.source === "heic") {
 }
 if (pair.target === "mp3" || pair.target === "ogg" || pair.source === "avi") {
   facts.push(
-    `No browser can encode ${to.label === "MP3" ? "MP3" : to.label}${pair.source === "avi" ? " or read AVI" : ""} on its own, so this pair loads a 9.7 MB engine the first time you use it. Once, then cached, and the page tells you before it starts.`,
+    `Most browsers cannot ${pair.source === "avi" ? "read AVI" : `encode ${to.label}`} on their own, so this pair usually loads a 9.7 MB engine the first time you use it — once, then cached, and the page tells you before it starts. If your browser happens to have the codec built in, it is used instead and nothing is downloaded.`,
   );
 }
 

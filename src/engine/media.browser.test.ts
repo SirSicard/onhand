@@ -205,9 +205,22 @@ describe("engine routing", () => {
     expect(result.engineId).toBe("webcodecs");
   }, 180_000);
 
-  it("uses ffmpeg for MP3, because no browser can encode it", async () => {
+  it("produces a real MP3 whichever engine this browser can use", async () => {
+    // NOT asserting ffmpeg. That assertion encoded a belief — "no browser can
+    // encode MP3" — which CI falsified: Playwright's Linux WebKit is
+    // GStreamer-backed and genuinely has an MP3 encoder, so the WebCodecs path
+    // correctly won there and the test failed for being wrong.
+    //
+    // The routing is capability-based precisely so it can take a fast path
+    // wherever one exists. Pinning an engine per pair would defeat that and
+    // break on the next browser release that gains a codec.
     const result = await convert(await fixture("tone.wav"), "wav", "mp3", {}, () => {});
-    expect(result.engineId).toBe("ffmpeg");
+    console.log(`wav -> mp3 handled by: ${result.engineId} in ${result.durationMs}ms`);
+    expect(["webcodecs", "ffmpeg"]).toContain(result.engineId);
+
+    const info = await inspect(result.blob);
+    expect(info.hasAudio, "mp3 output has no audio track").toBe(true);
+    expect(isAboutTwoSeconds(info.duration)).toBe(true);
   }, 180_000);
 
   it("uses ffmpeg for AVI, which mediabunny cannot demux", async () => {
@@ -227,6 +240,30 @@ describe("engine routing", () => {
     const info = await inspect(result.blob);
     expect(info.hasVideo && info.hasAudio).toBe(true);
   }, 180_000);
+});
+
+describe("error classification", () => {
+  it("never calls a small file too large, whatever went wrong inside", async () => {
+    // Measured on CI: a 10 KB Ogg file was reported as "too large to convert"
+    // because ffmpeg.wasm says "Aborted()" for almost any internal failure and
+    // the classifier matched /abort/. That message is both false and
+    // unactionable — the user trims a file that was already tiny.
+    const junk = new File([new Uint8Array(4096)], "broken.ogg", { type: "audio/ogg" });
+    let message = "";
+    try {
+      await convert(junk, "ogg", "opus", {}, () => {});
+    } catch (err) {
+      message = (err as Error).message;
+    }
+    expect(message, "a 4 KB file must not be described as too large").not.toMatch(/too large/i);
+  }, 180_000);
+
+  it("still says too large when a file genuinely is", async () => {
+    // The guardrail runs before any engine, so this is instant.
+    const huge = new File([new Uint8Array(1024)], "huge.mov", { type: "video/quicktime" });
+    Object.defineProperty(huge, "size", { value: 8 * 1024 ** 3 });
+    await expect(convert(huge, "mov", "mp4", {}, () => {})).rejects.toThrow(/too large/i);
+  });
 });
 
 describe("failure behaviour", () => {

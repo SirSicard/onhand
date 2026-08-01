@@ -60,15 +60,21 @@ are genuinely cached, not merely because a service worker exists.
 Browser video conversion has two routes and neither is sufficient alone.
 
 **WebCodecs** uses the codecs already in your browser, usually
-hardware-accelerated. Fast, no download — but no browser has an MP3 encoder,
-none has Vorbis, Firefox has no AAC encoder, and none can demux AVI.
+hardware-accelerated. Fast, no download — but the gaps are large and uneven.
+Most browsers cannot encode MP3, Firefox has no AAC encoder, Chrome and Safari
+have no Vorbis encoder, and none can demux AVI. _Which_ gaps you have depends
+on your browser and your operating system: Firefox does encode Vorbis, and
+some Linux WebKit builds do encode MP3.
 
 **ffmpeg.wasm** does all of it, and is a 9.7 MB download.
 
 Onhand uses the first wherever it works and falls through to the second when it
-doesn't. You never see the choice. There is no browser-support table to go stale
-either: the engine names the codec it wants and asks the browser at runtime
-whether it can encode it.
+doesn't. You never see the choice. There is deliberately no browser-support
+table to go stale: the engine names the codec it wants and asks the browser at
+runtime whether it can encode it — so on a browser that _does_ have an MP3
+encoder, you get the fast path automatically, with no code change here. Writing
+that table by hand would have been wrong within a month; a test that asserted
+one was wrong within a day.
 
 Measured — `mov` → `mp4`, same file, same verified output:
 
