@@ -24,7 +24,7 @@
  */
 
 import { chromium } from "playwright";
-import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -72,7 +72,18 @@ function card(headingHtml, subHtml) {
   </body>`;
 }
 
-/** Pull "HEIC" and "JPEG" out of a built pair page's own <h1>. */
+/**
+ * Pull "HEIC" and "JPEG" out of a built pair page's own <h1>, and the card that
+ * page actually asks for out of its own og:image.
+ *
+ * Reading the reference rather than recomputing the rank is deliberate. Only the
+ * top of the ranking gets a bespoke card (OG_CARD_LIMIT in src/lib/pairs.ts) —
+ * 148 cards would be 4.6 MB of committed PNGs for artwork on pages nobody
+ * reaches. If this script decided the cut independently the two could disagree,
+ * and a page whose <meta> points at a PNG that was never generated is worse than
+ * having no card at all: Cloudflare answers the missing file with the 404 page
+ * at HTTP 200, so the preview renders as a broken image everywhere it is shared.
+ */
 async function pairsFromDist() {
   const entries = await readdir(dist, { withFileTypes: true }).catch(() => []);
   const found = [];
@@ -86,18 +97,40 @@ async function pairsFromDist() {
       .replace(/\s+/g, " ")
       .trim();
     const m = text.match(/^Convert (.+?) to (.+)$/);
-    if (m) found.push({ slug: entry.name, from: m[1], to: m[2] });
+    if (!m) continue;
+
+    const og = html.match(/<meta[^>]+property="og:image"[^>]+content="([^"]+)"/)?.[1] ?? "";
+    found.push({
+      slug: entry.name,
+      from: m[1],
+      to: m[2],
+      wantsCard: og.includes(`/og/${entry.name}.png`),
+    });
   }
   return found.sort((a, b) => a.slug.localeCompare(b.slug));
 }
 
-const pairs = await pairsFromDist();
-if (pairs.length === 0) {
+const allPairs = await pairsFromDist();
+if (allPairs.length === 0) {
   console.error("No pair pages found in dist/. Run `pnpm build` first.");
   process.exit(1);
 }
+const pairs = allPairs.filter((p) => p.wantsCard);
 
 await mkdir(outDir, { recursive: true });
+
+// Drop cards for pairs that have since fallen out of the top of the ranking.
+// Without this they stay in public/, get copied into dist/, and get committed —
+// binaries for pages that no longer reference them, forever.
+const wanted = new Set(pairs.map((p) => `${p.slug}.png`));
+let removed = 0;
+for (const name of await readdir(outDir).catch(() => [])) {
+  if (name.endsWith(".png") && !wanted.has(name)) {
+    await rm(join(outDir, name));
+    removed++;
+  }
+}
+
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1200, height: 630 } });
 
@@ -129,5 +162,10 @@ await browser.close();
 console.log(
   `og: 1 site card + ${pairs.length} pair cards ` +
     `(${(total / 1024 / 1024).toFixed(1)} MB, ${Math.round(total / pairs.length / 1024)} KB each)`,
+);
+console.log(
+  `${allPairs.length - pairs.length} of ${allPairs.length} pair pages fall back to the site card` +
+    (removed ? `; removed ${removed} stale card(s)` : "") +
+    ".",
 );
 console.log("run `pnpm build` again so public/og/ is copied into dist/");

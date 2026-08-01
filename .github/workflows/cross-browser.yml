@@ -19,9 +19,15 @@ on:
     # regression is actually plausible.
     branches: [main]
     paths:
-      - "src/engine/**"
+      # Everything that can change what a browser actually renders or runs.
+      # This was src/engine only, so a design pass touching components and
+      # styles reached production with no cross-browser check at all — on a
+      # project where WebKit produced most of the interesting breakage.
+      - "src/**"
       - "package.json"
       - "pnpm-lock.yaml"
+      - "astro.config.mjs"
+      - "vitest.browser.config.ts"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

@@ -30,7 +30,8 @@
     "pretest:browser": "node scripts/sync-ffmpeg-core.mjs",
     "pretest:browser:all": "node scripts/sync-ffmpeg-core.mjs",
     "verify:live": "node scripts/verify-live.mjs",
-    "airplane": "node scripts/make-airplane-gif.mjs"
+    "airplane": "node scripts/make-airplane-gif.mjs",
+    "audit:pages": "node scripts/audit-pages.mjs"
   },
   "dependencies": {
     "@astrojs/react": "^4.4.0",
