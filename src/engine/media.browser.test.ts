@@ -33,6 +33,29 @@ async function fixture(name: string): Promise<File> {
  * Deliberately not using an <audio>/<video> element: those report readyState on
  * metadata alone, so a file with a valid header and no frames looks fine.
  */
+/**
+ * Run a conversion and, if it fails, surface the underlying cause.
+ *
+ * `ConversionError` keeps the engine's real output in `cause` so the message
+ * shown to a user stays a sentence. Vitest serialises only the message, so a CI
+ * failure read "Converting OGG to Opus failed." and nothing else — true, and
+ * useless for finding out why from a log you cannot attach a debugger to.
+ */
+async function convertOrExplain(
+  file: File,
+  source: FormatId,
+  target: FormatId,
+  options: Parameters<typeof convert>[3] = {},
+) {
+  try {
+    return await convert(file, source, target, options, () => {});
+  } catch (err) {
+    const e = err as Error & { cause?: Error; suggestion?: string };
+    const cause = e.cause?.message ?? "(no cause recorded)";
+    throw new Error(`${e.message}\n      engine said: ${cause}`, { cause: e });
+  }
+}
+
 async function inspect(blob: Blob) {
   const { Input, BlobSource, ALL_FORMATS } = await import("mediabunny");
   const input = new Input({ source: new BlobSource(blob), formats: ALL_FORMATS });
@@ -79,7 +102,7 @@ describe("audio conversion matrix", () => {
       for (const target of AUDIO_TARGETS) {
         it(`converts to ${target}`, async () => {
           const file = await fixture(name);
-          const result = await convert(file, source, target, {}, () => {});
+          const result = await convertOrExplain(file, source, target);
           expect(result.bytesOut).toBeGreaterThan(0);
 
           const info = await inspect(result.blob);
@@ -108,7 +131,7 @@ describe("video conversion", () => {
   for (const [name, source] of VIDEO_SOURCES) {
     it(`${name} -> mp4 keeps both tracks and its dimensions`, async () => {
       const file = await fixture(name);
-      const result = await convert(file, source, "mp4", {}, () => {});
+      const result = await convertOrExplain(file, source, "mp4");
 
       const info = await inspect(result.blob);
       expect(info.hasVideo, `${name} lost its video track`).toBe(true);
