@@ -180,7 +180,9 @@ describe("progress reporting", () => {
     // when the conversion is fine.
     const numeric = seen.filter((p): p is number => typeof p === "number");
     for (let i = 1; i < numeric.length; i++) {
-      expect(numeric[i]!, `progress went backwards at ${i}`).toBeGreaterThanOrEqual(numeric[i - 1]!);
+      expect(numeric[i]!, `progress went backwards at ${i}`).toBeGreaterThanOrEqual(
+        numeric[i - 1]!,
+      );
     }
     // null is allowed (indeterminate) but a number outside 0..1 is not.
     for (const p of numeric) {

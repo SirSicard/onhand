@@ -6,6 +6,7 @@ reality contradicts them, fix reality's paperwork: append a dated erratum to §9
 than silently diverging (same protocol as the showcase CANON — it worked).
 
 **Prime directives**
+
 1. File bytes NEVER leave the device. No exceptions, no "just for this format", no analytics.
 2. Main thread never blocks. Every codec call lives in a worker.
 3. Silent fallback: users pick a target format, never an "engine".
@@ -121,16 +122,16 @@ deploy is one command; README numbers are real measurements, not claims.
 
 ## 6. Risk register (pre-loaded answers)
 
-| Risk | Answer |
-|---|---|
-| Safari WebCodecs quirks below 26 | Probe per-config at runtime, never per-UA; ffmpeg fallback is always present |
-| SAB/mt instability | mt is OFF by default; single-thread everywhere is the shipping config |
-| 2 GB wasm ceiling | Pre-flight estimator + honest hard-stop copy; never crash mid-way |
-| COEP breaks a future embed | We embed nothing; keep it that way (fonts local, no CDNs, no analytics) |
-| ffmpeg core licence (x264 = GPL) | THIRD_PARTY notice now; custom LGPL-only core is v1.1; H.264 encode rides WebCodecs anyway |
-| VERT ships local video first | Their architecture routes video out by design (daemon); still — ship P2 before polishing P5 |
-| iOS memory limits | Cap concurrent jobs at 1 on iOS; document honestly |
-| Someone asks for YouTube download | /why explains the refusal once, link it forever |
+| Risk                              | Answer                                                                                      |
+| --------------------------------- | ------------------------------------------------------------------------------------------- |
+| Safari WebCodecs quirks below 26  | Probe per-config at runtime, never per-UA; ffmpeg fallback is always present                |
+| SAB/mt instability                | mt is OFF by default; single-thread everywhere is the shipping config                       |
+| 2 GB wasm ceiling                 | Pre-flight estimator + honest hard-stop copy; never crash mid-way                           |
+| COEP breaks a future embed        | We embed nothing; keep it that way (fonts local, no CDNs, no analytics)                     |
+| ffmpeg core licence (x264 = GPL)  | THIRD_PARTY notice now; custom LGPL-only core is v1.1; H.264 encode rides WebCodecs anyway  |
+| VERT ships local video first      | Their architecture routes video out by design (daemon); still — ship P2 before polishing P5 |
+| iOS memory limits                 | Cap concurrent jobs at 1 on iOS; document honestly                                          |
+| Someone asks for YouTube download | /why explains the refusal once, link it forever                                             |
 
 ## 7. Sequencing note for Opus
 
@@ -146,7 +147,8 @@ us nothing and lies to no one.
 
 ## 9. Errata
 
-*(append as `- YYYY-MM-DD: finding → ruling`)*
+_(append as `- YYYY-MM-DD: finding → ruling`)_
+
 - 2026-08-01: Node 26 is what's installed locally; `.nvmrc` pins 26 rather than the
   plan's 22 so CI matches the dev machine. `engines.node` stays `>=22`.
 - 2026-08-01: pnpm 11 gates postinstall scripts via `allowBuilds` in
@@ -173,10 +175,11 @@ us nothing and lies to no one.
   in 48s. GitHub repo is PRIVATE for now; flip to public when P1 renders something.
 
 ### P1 errata
+
 - 2026-08-01: Vite dep pre-bundling rewrites `import.meta.url` inside codec packages,
   breaking their relative `.wasm` paths so the request 404s and the dev server
   returns index.html. Surfaces as `WebAssembly.instantiate(): expected magic word
-  00 61 73 6d, found 3c 21 64 6f` ("<!do"). ALL wasm codec packages must go in
+00 61 73 6d, found 3c 21 64 6f` ("<!do"). ALL wasm codec packages must go in
   `optimizeDeps.exclude`.
 - 2026-08-01: `@jsquash/avif` v2 takes plain 0-100 `quality`. Older wrappers used an
   inverted 0-63 `cqLevel`; passing that is silently ignored and every AVIF lands at
@@ -207,6 +210,7 @@ us nothing and lies to no one.
   correctly outputs 480x640. createImageBitmap applies it; do not "fix" this.
 
 ### P1 close-out
+
 - 2026-08-01: PDF both directions. pdf.js v6 REQUIRES `GlobalWorkerOptions.workerSrc`
   — setting it to "" throws rather than running inline; point it at the bundled
   worker via `?url`. PDFs render onto transparent canvas (comes out black) so fill
@@ -237,6 +241,7 @@ exposes `canEncodeVideo`/`canEncodeAudio`, which is what makes the routing
 honest — see below. Four packages and a pipeline became one dependency.
 
 **Two engines, and the user never sees either.**
+
 - `webcodecs` (cost 2) — mediabunny over the browser's own codecs. Fast, no
   download, real progress.
 - `ffmpeg` (cost 10) — ffmpeg.wasm. Correct for everything, first choice for
@@ -272,12 +277,12 @@ via ffmpeg** (no AAC encoder), all three producing correct output.
   copied to `public/ffmpeg/` on prebuild by `scripts/sync-ffmpeg-core.mjs`.
 - **The rotation fixture tested nothing.** `-metadata:s:v:0 rotate=90` is
   deprecated and modern ffmpeg ignores it silently — exit 0, file written, no
-  display matrix. The test failed and the *engine was innocent*; mediabunny had
+  display matrix. The test failed and the _engine was innocent_; mediabunny had
   been handling rotation correctly all along. Fixed with `-display_rotation` on
   the input, and the generator now verifies with ffprobe rather than trusting
   an exit code.
 - **ffmpeg exits 0 having written a 0-byte file.** The native Vorbis encoder is
-  stereo-only and fails *after* creating the output. A 0-byte fixture passes a
+  stereo-only and fails _after_ creating the output. A 0-byte fixture passes a
   presence check, so the generator now checks size and deletes empties.
 - **Two servers on one port.** A stale `astro dev` was bound to [::1]:4322 and
   won `localhost` resolution, so the first round of "production verification"
@@ -286,6 +291,7 @@ via ffmpeg** (no AAC encoder), all three producing correct output.
   COOP/COEP headers, which `astro preview` does not do.
 
 ### Found by driving the built UI, not by reading code
+
 - The target dropdown offered **JPEG, PNG and PDF for an audio file**. Now
   `targetsFor(source)` — an option that cannot work is not shown.
 - **Smallest/Balanced/Best did nothing on audio or video.** The presets only
@@ -343,6 +349,7 @@ jsdom, because focus order, layout and axe's contrast checks are meaningless
 without real rendering.
 
 ### What shipped
+
 - **Per-source target memory.** A folder of HEICs needs telling once that it
   should become PNG, not thirty times. Scoped by source format, validated on
   read — a remembered target that is no longer reachable would render a select
@@ -367,6 +374,7 @@ without real rendering.
   remove a row, overall progress mirrored into the tab title.
 
 ### Fixed on the way
+
 - **A blob URL was created on every render and never revoked**, pinning every
   output in memory for the life of the tab. On a 50-file video batch that is the
   difference between working and not.

@@ -230,9 +230,10 @@ async function load(): Promise<FFmpeg> {
       announce(false, null);
       loading = null;
       throw new ConversionError("internal", "The conversion engine failed to load.", {
-        suggestion: cause instanceof Error && /not deployed|web page/i.test(cause.message)
-          ? "The engine file is missing from the server. This is our bug, not yours."
-          : "Check your connection and try again — it's a one-time download.",
+        suggestion:
+          cause instanceof Error && /not deployed|web page/i.test(cause.message)
+            ? "The engine file is missing from the server. This is our bug, not yours."
+            : "Check your connection and try again — it's a one-time download.",
         cause,
       });
     }
@@ -319,10 +320,9 @@ function buildArgs(
     // H.264 cannot encode odd dimensions. Rounding down to even is invisible;
     // failing with "width not divisible by 2" is how a phone crop breaks a
     // converter, and portrait-odd.mp4 exists in the corpus to prove we don't.
-    const scale =
-      options.maxDimension
-        ? `scale='min(${options.maxDimension},iw)':'min(${options.maxDimension},ih)':force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2`
-        : `scale=trunc(iw/2)*2:trunc(ih/2)*2`;
+    const scale = options.maxDimension
+      ? `scale='min(${options.maxDimension},iw)':'min(${options.maxDimension},ih)':force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2`
+      : `scale=trunc(iw/2)*2:trunc(ih/2)*2`;
     args.push("-vf", scale);
 
     if (target === "webm") {
@@ -436,11 +436,15 @@ export const ffmpegEngine: Engine = {
         // An OOM inside wasm leaves the instance unusable, so this is the one
         // case that genuinely warrants discarding it.
         resetFfmpeg();
-        throw new ConversionError("too-large", "This file is too large to convert in the browser.", {
-          suggestion:
-            "In-browser conversion tops out around 2 GB of working memory. Trimming it to a shorter section usually gets under that.",
-          cause,
-        });
+        throw new ConversionError(
+          "too-large",
+          "This file is too large to convert in the browser.",
+          {
+            suggestion:
+              "In-browser conversion tops out around 2 GB of working memory. Trimming it to a shorter section usually gets under that.",
+            cause,
+          },
+        );
       }
       throw new ConversionError(
         "internal",

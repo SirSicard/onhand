@@ -130,7 +130,12 @@ describe("PDF", () => {
     const bytes = new Uint8Array(await result.blob.arrayBuffer());
     let entries = 0;
     for (let i = 0; i < bytes.length - 3; i++) {
-      if (bytes[i] === 0x50 && bytes[i + 1] === 0x4b && bytes[i + 2] === 0x01 && bytes[i + 3] === 0x02) {
+      if (
+        bytes[i] === 0x50 &&
+        bytes[i + 1] === 0x4b &&
+        bytes[i + 2] === 0x01 &&
+        bytes[i + 3] === 0x02
+      ) {
         entries++;
       }
     }
@@ -156,9 +161,9 @@ describe("PDF", () => {
 
 describe("failure behaviour", () => {
   it("reports an unsupported pair rather than producing a broken file", async () => {
-    await expect(
-      convert(await fixture("photo.png"), "png", "heic", {}, () => {}),
-    ).rejects.toThrow(/isn't supported/i);
+    await expect(convert(await fixture("photo.png"), "png", "heic", {}, () => {})).rejects.toThrow(
+      /isn't supported/i,
+    );
   });
 
   it("rejects a corrupt file with a human sentence", async () => {

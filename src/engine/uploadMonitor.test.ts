@@ -1,9 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import {
-  installUploadMonitor,
-  getSentBytes,
-  __resetUploadMonitor,
-} from "./uploadMonitor";
+import { installUploadMonitor, getSentBytes, __resetUploadMonitor } from "./uploadMonitor";
 
 /**
  * These tests exist because the first implementation of this counter was wrong

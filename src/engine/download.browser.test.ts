@@ -74,11 +74,7 @@ describe("saveZip", () => {
       { filename: "photo.webp", blob: text("third") },
     ]);
 
-    expect(Object.keys(files).sort()).toEqual([
-      "photo (2).webp",
-      "photo (3).webp",
-      "photo.webp",
-    ]);
+    expect(Object.keys(files).sort()).toEqual(["photo (2).webp", "photo (3).webp", "photo.webp"]);
     expect(new TextDecoder().decode(files["photo.webp"])).toBe("first");
     expect(new TextDecoder().decode(files["photo (2).webp"])).toBe("second");
   });

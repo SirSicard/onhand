@@ -69,8 +69,7 @@ export default function EnvironmentReport() {
         label="H.264 profile in use"
         ok={caps.webCodecs.videoEncode.h264.supported}
         detail={
-          caps.webCodecs.videoEncode.h264.codec ??
-          "unavailable — mp4 encodes fall back to ffmpeg"
+          caps.webCodecs.videoEncode.h264.codec ?? "unavailable — mp4 encodes fall back to ffmpeg"
         }
       />
       <Row

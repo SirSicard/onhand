@@ -126,9 +126,7 @@ async function supportedVideo(
   kind: "encode" | "decode",
 ): Promise<Record<VideoCodecKey, CodecSupport>> {
   const keys = Object.keys(VIDEO_LADDERS) as VideoCodecKey[];
-  const results = await Promise.all(
-    keys.map((k) => probeVideoLadder(VIDEO_LADDERS[k], kind)),
-  );
+  const results = await Promise.all(keys.map((k) => probeVideoLadder(VIDEO_LADDERS[k], kind)));
   return Object.fromEntries(keys.map((k, i) => [k, results[i] ?? NO])) as Record<
     VideoCodecKey,
     CodecSupport
@@ -139,9 +137,7 @@ async function supportedAudio(
   kind: "encode" | "decode",
 ): Promise<Record<AudioCodecKey, CodecSupport>> {
   const keys = Object.keys(AUDIO_LADDERS) as AudioCodecKey[];
-  const results = await Promise.all(
-    keys.map((k) => probeAudioLadder(AUDIO_LADDERS[k], kind)),
-  );
+  const results = await Promise.all(keys.map((k) => probeAudioLadder(AUDIO_LADDERS[k], kind)));
   return Object.fromEntries(keys.map((k, i) => [k, results[i] ?? NO])) as Record<
     AudioCodecKey,
     CodecSupport
@@ -155,7 +151,9 @@ function detectMemoryConstrained(): boolean {
   const ua = navigator.userAgent;
   const iOS = /iPhone|iPad|iPod/.test(ua);
   const iPadOSMasqueradingAsMac =
-    /Macintosh/.test(ua) && typeof navigator.maxTouchPoints === "number" && navigator.maxTouchPoints > 1;
+    /Macintosh/.test(ua) &&
+    typeof navigator.maxTouchPoints === "number" &&
+    navigator.maxTouchPoints > 1;
   return iOS || iPadOSMasqueradingAsMac;
 }
 
@@ -184,7 +182,8 @@ export function probeCapabilities(): Promise<Capabilities> {
       sharedArrayBuffer: typeof SharedArrayBuffer !== "undefined",
       deviceMemoryGb: nav.deviceMemory,
       hardwareConcurrency: navigator.hardwareConcurrency || 4,
-      fileSystemAccess: typeof (globalThis as { showSaveFilePicker?: unknown }).showSaveFilePicker === "function",
+      fileSystemAccess:
+        typeof (globalThis as { showSaveFilePicker?: unknown }).showSaveFilePicker === "function",
       webCodecs: {
         available: hasVideoCodecs,
         videoDecode,

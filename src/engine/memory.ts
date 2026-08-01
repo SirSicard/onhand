@@ -74,16 +74,12 @@ export function assertWithinMemoryBudget(
   const estimate = estimatePeakMemory(inputBytes, source, target);
   if (!estimate.exceeds) return;
 
-  throw new ConversionError(
-    "too-large",
-    `This file is too large to convert in the browser.`,
-    {
-      // Say why, and say what would work. "Too large" with no number is the
-      // kind of error message that makes people assume the tool is broken.
-      suggestion:
-        `Converting it needs roughly ${gb(estimate.peakBytes)} of memory, and a browser tab ` +
-        `has about ${gb(LIMIT_BYTES)} to work with. Trimming it to a shorter section, or ` +
-        `splitting it in two, will get it under the limit.`,
-    },
-  );
+  throw new ConversionError("too-large", `This file is too large to convert in the browser.`, {
+    // Say why, and say what would work. "Too large" with no number is the
+    // kind of error message that makes people assume the tool is broken.
+    suggestion:
+      `Converting it needs roughly ${gb(estimate.peakBytes)} of memory, and a browser tab ` +
+      `has about ${gb(LIMIT_BYTES)} to work with. Trimming it to a shorter section, or ` +
+      `splitting it in two, will get it under the limit.`,
+  });
 }

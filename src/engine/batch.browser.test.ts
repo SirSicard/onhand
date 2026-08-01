@@ -63,8 +63,10 @@ describe("50-file batch", () => {
       // perceives as "frozen" is one long block, not many short ones spread
       // across several seconds of work.
       const worst = Math.max(...longTasks);
-      expect(worst, `worst main-thread block ${worst.toFixed(0)}ms (total ${blocked.toFixed(0)}ms)`)
-        .toBeLessThan(400);
+      expect(
+        worst,
+        `worst main-thread block ${worst.toFixed(0)}ms (total ${blocked.toFixed(0)}ms)`,
+      ).toBeLessThan(400);
     }
 
     // Not a performance assertion so much as a smoke alarm: 50 small images

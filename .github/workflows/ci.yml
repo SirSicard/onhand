@@ -27,6 +27,11 @@ jobs:
       - name: Install
         run: pnpm install --frozen-lockfile
 
+      # Formatting was drifting unchecked: 24 files were unformatted before
+      # this step existed, because `pnpm lint` was a script nobody ran.
+      - name: Lint
+        run: pnpm lint
+
       - name: Typecheck
         run: pnpm typecheck
 

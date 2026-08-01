@@ -39,11 +39,11 @@ means that asterisk no longer has to exist.
 
 ## What it will support
 
-| | |
-|---|---|
+|            |                                                                     |
+| ---------- | ------------------------------------------------------------------- |
 | **Images** | jpg png webp avif **heic** gif bmp tiff ico svg → jpg png webp avif |
-| **Audio** | mp3 wav m4a aac ogg opus flac aiff wma |
-| **Video** | mp4 mov webm mkv avi gif, plus extract-audio |
+| **Audio**  | mp3 wav m4a aac ogg opus flac aiff wma                              |
+| **Video**  | mp4 mov webm mkv avi gif, plus extract-audio                        |
 
 **Not supported, honestly:** Office documents (docx/xlsx/pptx). LibreOffice-in-the-browser is
 a ~250 MB download and unstable as of 2026. When that changes, this line changes.

@@ -139,7 +139,10 @@ describe("keyboard operation", () => {
         el.getAttribute("aria-label") ??
         el.textContent?.trim() ??
         (el.id ? container.querySelector(`label[for="${el.id}"]`)?.textContent : null);
-      expect(name, `${el.tagName} has no accessible name: ${el.outerHTML.slice(0, 80)}`).toBeTruthy();
+      expect(
+        name,
+        `${el.tagName} has no accessible name: ${el.outerHTML.slice(0, 80)}`,
+      ).toBeTruthy();
     }
   });
 
@@ -256,8 +259,16 @@ describe("AC-P3: a mixed batch, driven by keyboard alone", () => {
     render();
 
     const names = [
-      "photo.png", "photo.jpg", "photo.heic", "photo.webp", "photo.bmp",
-      "graphic-alpha.png", "icon.ico", "vector.svg", "tiny-1x1.png", "photo.tiff",
+      "photo.png",
+      "photo.jpg",
+      "photo.heic",
+      "photo.webp",
+      "photo.bmp",
+      "graphic-alpha.png",
+      "icon.ico",
+      "vector.svg",
+      "tiny-1x1.png",
+      "photo.tiff",
     ];
     addFiles(await Promise.all(names.map(fixture)));
     expect(rows()).toHaveLength(10);

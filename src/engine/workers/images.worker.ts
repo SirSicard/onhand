@@ -41,7 +41,14 @@ const JSQUASH_DECODERS: Partial<Record<FormatId, () => Promise<JsquashDecode>>> 
  * Cheaper and faster than shipping a wasm codec when it works — and for GIF,
  * BMP and ICO there is no good small wasm decoder anyway.
  */
-const NATIVE_DECODABLE: ReadonlySet<FormatId> = new Set(["gif", "bmp", "ico", "png", "jpeg", "webp"]);
+const NATIVE_DECODABLE: ReadonlySet<FormatId> = new Set([
+  "gif",
+  "bmp",
+  "ico",
+  "png",
+  "jpeg",
+  "webp",
+]);
 
 async function decodeNatively(buffer: ArrayBuffer, mime: string): Promise<ImageData> {
   const blob = new Blob([buffer], { type: mime });
@@ -135,7 +142,10 @@ async function decodeSvg(buffer: ArrayBuffer, maxDimension?: number): Promise<Im
   const { Resvg } = await loadResvg();
   const svg = new TextDecoder().decode(buffer);
 
-  const resvg = new Resvg(svg, maxDimension ? { fitTo: { mode: "width", value: maxDimension } } : {});
+  const resvg = new Resvg(
+    svg,
+    maxDimension ? { fitTo: { mode: "width", value: maxDimension } } : {},
+  );
   const rendered = resvg.render();
   const width = rendered.width;
   const height = rendered.height;
@@ -252,7 +262,11 @@ const api = {
   },
 
   /** Dimensions without a full re-encode — used for pre-flight estimates. */
-  async probe(buffer: ArrayBuffer, source: FormatId, mime: string): Promise<{ width: number; height: number }> {
+  async probe(
+    buffer: ArrayBuffer,
+    source: FormatId,
+    mime: string,
+  ): Promise<{ width: number; height: number }> {
     const image = await decode(buffer, source, mime);
     return { width: image.width, height: image.height };
   },

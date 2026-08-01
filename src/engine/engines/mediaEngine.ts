@@ -102,10 +102,14 @@ export const mediaEngine: Engine = {
         throw new ConversionError("internal", "Cancelled");
       }
       if (/memory|allocation|out of bounds/i.test(message)) {
-        throw new ConversionError("too-large", "This file is too large to convert in the browser.", {
-          suggestion: "Try trimming it to a shorter section first.",
-          cause,
-        });
+        throw new ConversionError(
+          "too-large",
+          "This file is too large to convert in the browser.",
+          {
+            suggestion: "Try trimming it to a shorter section first.",
+            cause,
+          },
+        );
       }
       // Anything else is also worth letting ffmpeg attempt — a decoder that
       // chokes on an unusual bitstream is exactly what the fallback is for.

@@ -14,7 +14,12 @@ export default defineConfig({
     // fail for the wrong reason ("Failed to parse URL from /fixtures/...") — the
     // relative fetch has no origin, and crossOriginIsolated is undefined. They
     // belong to vitest.browser.config.ts; run them with `pnpm test:browser`.
-    exclude: ["**/node_modules/**", "**/dist/**", "src/**/*.browser.test.ts", "src/**/*.browser.test.tsx"],
+    exclude: [
+      "**/node_modules/**",
+      "**/dist/**",
+      "src/**/*.browser.test.ts",
+      "src/**/*.browser.test.tsx",
+    ],
   },
   resolve: {
     alias: {

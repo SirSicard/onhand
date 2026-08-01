@@ -63,7 +63,9 @@ export function installUploadMonitor(): void {
   };
 
   const originalSend = XMLHttpRequest.prototype.send;
-  XMLHttpRequest.prototype.send = function patchedSend(body?: Document | XMLHttpRequestBodyInit | null) {
+  XMLHttpRequest.prototype.send = function patchedSend(
+    body?: Document | XMLHttpRequestBodyInit | null,
+  ) {
     const size = bodySize(body);
     add(size === -1 ? 1 : size);
     return originalSend.call(this, body as XMLHttpRequestBodyInit | null);

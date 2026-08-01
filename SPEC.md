@@ -1,10 +1,10 @@
 # ONHAND — product spec v1
 
-**One line:** every file converter on one page, nothing ever uploaded — *including video*.
+**One line:** every file converter on one page, nothing ever uploaded — _including video_.
 
 **Thesis:** the cloud converters must meter because they pay for compute. We don't, so we
 don't. VERT proved the demand for the local model but left video on a server; WebCodecs
-(near-baseline 2026, Safari 26) lets us kill that asterisk with *hardware-accelerated* video
+(near-baseline 2026, Safari 26) lets us kill that asterisk with _hardware-accelerated_ video
 conversion in the tab. Free forever is structural: static site, user's silicon.
 
 **Non-negotiables** (the Inkwell values, restated):
@@ -17,13 +17,14 @@ no email gates · no fake progress · file bytes provably never leave the device
 
 ### v1 formats (three engines, ~40 formats, ~200 curated pairs)
 
-| Engine | In | Out | Notes |
-|---|---|---|---|
-| **Images** (jSquash + libheif-js + resvg + pdf-lib/pdf.js) | jpg png webp avif **heic/heif** gif bmp tiff ico svg pdf | jpg png webp avif gif ico pdf | HEIC→JPG is the hero pair (every iPhone). pdf↔images both directions. Quality slider + resize + strip-metadata toggle |
-| **Audio** (ffmpeg.wasm single-thread) | mp3 wav m4a aac ogg opus flac aiff wma | mp3 wav m4a ogg opus flac | Fast even in wasm (audio is small). Bitrate presets |
-| **Video** (WebCodecs fast path → ffmpeg.wasm fallback) | mp4 mov webm mkv avi m4v gif | **mp4 (H.264/AAC)** webm gif mp3/wav/m4a (extract) | mov→mp4, webm→mp4, mkv→mp4, video→mp3, mp4→gif, gif→mp4. Resolution presets (keep/1080/720), trim (start–end) v1.1 |
+| Engine                                                     | In                                                       | Out                                                | Notes                                                                                                                 |
+| ---------------------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| **Images** (jSquash + libheif-js + resvg + pdf-lib/pdf.js) | jpg png webp avif **heic/heif** gif bmp tiff ico svg pdf | jpg png webp avif gif ico pdf                      | HEIC→JPG is the hero pair (every iPhone). pdf↔images both directions. Quality slider + resize + strip-metadata toggle |
+| **Audio** (ffmpeg.wasm single-thread)                      | mp3 wav m4a aac ogg opus flac aiff wma                   | mp3 wav m4a ogg opus flac                          | Fast even in wasm (audio is small). Bitrate presets                                                                   |
+| **Video** (WebCodecs fast path → ffmpeg.wasm fallback)     | mp4 mov webm mkv avi m4v gif                             | **mp4 (H.264/AAC)** webm gif mp3/wav/m4a (extract) | mov→mp4, webm→mp4, mkv→mp4, video→mp3, mp4→gif, gif→mp4. Resolution presets (keep/1080/720), trim (start–end) v1.1    |
 
 ### Explicitly OUT of v1 (write these in the README as honesty)
+
 - Office docs (docx/xlsx/pptx) — LibreOffice-WASM is ~250 MB and unstable in 2026; revisit
 - Anything YouTube/URL-download shaped — legal tarpit, requires network, off-thesis
 - OCR, editing suites, AI upscaling — different products
@@ -55,6 +56,7 @@ estimator warns > ~1.2 GB inputs on the ffmpeg path (2 GB wasm ceiling is real).
 
 **Hosting:** Cloudflare Pages (free, unlimited bandwidth — the 31 MB core makes this the
 deciding factor over Vercel's 100 GB cap). `_headers`:
+
 ```
 /*
   Cross-Origin-Opener-Policy: same-origin
@@ -62,17 +64,19 @@ deciding factor over Vercel's 100 GB cap). `_headers`:
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 ```
+
 Everything self-hosted (COEP breaks third-party embeds; we have none — fonts local, zero
 external requests, which is also the marketing claim).
 
 ## 3. UX spec
 
-**Zero state:** one full-viewport drop zone. Headline: *"Drop anything."* Sub: *"Converted on
-your device. Nothing is uploaded — watch the network tab if you don't believe us."* Paste
+**Zero state:** one full-viewport drop zone. Headline: _"Drop anything."_ Sub: _"Converted on
+your device. Nothing is uploaded — watch the network tab if you don't believe us."_ Paste
 (⌘V), click-to-browse, folder drop. Beneath the fold: format grid linking the pair pages.
 
 **Queue (the whole app):** one row per file —
 `[icon] name · size → [target format ▾] [⚙ options] [progress/●done] [↓] [✕]`
+
 - Target picker defaults smartly (heic→jpg, mov→mp4, wav→mp3); remembers last choice per source type
 - Options = presets first (**Smallest / Balanced / Best / Lossless**), knobs behind "Advanced"
 - Global bar: `Convert all to ▾` · `Start` · `Download all (.zip)` (fflate, streamed)
@@ -80,6 +84,7 @@ your device. Nothing is uploaded — watch the network tab if you don't believe 
 - Output row shows size delta: `12.4 MB → 3.1 MB (−75 %)`
 
 **Trust surface (differentiator, not decoration):**
+
 - Live **"↑ 0 bytes uploaded"** counter in the header (PerformanceObserver over fetch/XHR)
 - Offline badge once service worker has the visited codecs cached; "works in airplane mode"
 - Footer: GitHub link, licence, "read the code" — the Inkwell README voice

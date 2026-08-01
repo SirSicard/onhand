@@ -5,7 +5,8 @@ import {
   renameTo,
   encodableFormats,
   targetsFor,
-  FORMATS,} from "./formats";
+  FORMATS,
+} from "./formats";
 
 describe("detectFormat", () => {
   it("identifies by extension, case-insensitively", () => {
@@ -83,9 +84,10 @@ describe("format registry integrity", () => {
     const seen = new Map<string, string>();
     for (const f of Object.values(FORMATS)) {
       for (const ext of f.extensions) {
-        expect(seen.has(ext), `extension .${ext} claimed by both ${seen.get(ext)} and ${f.id}`).toBe(
-          false,
-        );
+        expect(
+          seen.has(ext),
+          `extension .${ext} claimed by both ${seen.get(ext)} and ${f.id}`,
+        ).toBe(false);
         seen.set(ext, f.id);
       }
     }

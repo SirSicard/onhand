@@ -47,7 +47,11 @@ const CONTAINERS: Partial<
 > = {
   // MP4/MOV: H.264 + AAC is the pair that plays on everything, which is the
   // entire reason someone converts to MP4.
-  mp4: { format: () => new Mp4OutputFormat({ fastStart: "in-memory" }), video: "avc", audio: "aac" },
+  mp4: {
+    format: () => new Mp4OutputFormat({ fastStart: "in-memory" }),
+    video: "avc",
+    audio: "aac",
+  },
   mov: { format: () => new MovOutputFormat(), video: "avc", audio: "aac" },
   // WebM is defined as VP8/VP9/AV1 + Vorbis/Opus. Anything else in it is not a
   // WebM file, whatever the extension says.
@@ -180,9 +184,7 @@ const api = {
     if (!conversion.isValid) {
       // Something in the requested shape can't be produced — a codec the
       // container won't hold, or a track nothing can encode. ffmpeg's turn.
-      const why = conversion.discardedTracks
-        .map((t) => `${t.track.type}: ${t.reason}`)
-        .join("; ");
+      const why = conversion.discardedTracks.map((t) => `${t.track.type}: ${t.reason}`).join("; ");
       throw new NotMyJobError(why || "conversion is not valid in this browser");
     }
 

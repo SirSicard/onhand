@@ -4,20 +4,13 @@
     {
       "name": "onhand-dev",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": [
-        "dev",
-        "--port",
-        "4321"
-      ],
+      "runtimeArgs": ["dev", "--port", "4321"],
       "port": 4321
     },
     {
       "name": "onhand-preview",
       "runtimeExecutable": "node",
-      "runtimeArgs": [
-        "scripts/serve-dist.mjs",
-        "4322"
-      ],
+      "runtimeArgs": ["scripts/serve-dist.mjs", "4322"],
       "port": 4322
     }
   ]

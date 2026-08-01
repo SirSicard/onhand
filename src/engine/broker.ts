@@ -75,7 +75,12 @@ export async function convert(
     if (signal?.aborted) throw new ConversionError("internal", "Cancelled");
     try {
       const { blob, filename } = await engine.convert(
-        file, source, target, options, onProgress, signal,
+        file,
+        source,
+        target,
+        options,
+        onProgress,
+        signal,
       );
       return {
         blob,
@@ -90,7 +95,10 @@ export async function convert(
       // An unsupported/corrupt verdict is the file's fault, not the engine's —
       // another engine will reach the same conclusion, so stop rather than
       // making the user wait through a pointless second attempt.
-      if (err instanceof ConversionError && (err.kind === "unsupported" || err.kind === "corrupt")) {
+      if (
+        err instanceof ConversionError &&
+        (err.kind === "unsupported" || err.kind === "corrupt")
+      ) {
         throw err;
       }
       // Anything else: try the next engine silently.

@@ -132,10 +132,14 @@ export const imageEngine: Engine = {
         );
       }
       if (/memory|allocation|out of bounds/i.test(message)) {
-        throw new ConversionError("too-large", "This image is too large to convert in the browser.", {
-          suggestion: "Try reducing the dimensions first, or use a smaller source file.",
-          cause,
-        });
+        throw new ConversionError(
+          "too-large",
+          "This image is too large to convert in the browser.",
+          {
+            suggestion: "Try reducing the dimensions first, or use a smaller source file.",
+            cause,
+          },
+        );
       }
       throw new ConversionError(
         "internal",

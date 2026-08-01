@@ -68,9 +68,7 @@ const EXPECTED: Record<string, { format: string; dim: string }> = {
 };
 
 describe("test corpus", () => {
-  const present = readdirSync(FIXTURES).filter(
-    (f) => !f.endsWith(".py") && !f.endsWith(".md"),
-  );
+  const present = readdirSync(FIXTURES).filter((f) => !f.endsWith(".py") && !f.endsWith(".md"));
 
   it("has every expected fixture on disk", () => {
     for (const name of Object.keys(EXPECTED)) {
