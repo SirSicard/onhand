@@ -29,7 +29,10 @@
     "@resvg/resvg-wasm": "^2.6.2",
     "astro": "^5.16.0",
     "comlink": "^4.4.2",
+    "fflate": "^0.8.3",
     "libheif-js": "^1.19.8",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^6.2.108",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "utif": "^3.1.0"

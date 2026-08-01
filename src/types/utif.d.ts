@@ -25,3 +25,9 @@ declare module "utif" {
 
   export default UTIF;
 }
+
+/** Vite's `?url` imports return the emitted asset path as a default export. */
+declare module "*?url" {
+  const url: string;
+  export default url;
+}

@@ -86,7 +86,16 @@ export interface Engine {
     options: ConvertOptions,
     onProgress: (u: ProgressUpdate) => void,
     signal?: AbortSignal,
-  ): Promise<{ blob: Blob }>;
+  ): Promise<{
+    blob: Blob;
+    /**
+     * Overrides the name the broker would derive from the target format. Needed
+     * when the container differs from the format asked for — a multi-page PDF
+     * rendered to PNG comes back as a .zip, and calling that file "x.png" would
+     * be a lie the operating system then acts on.
+     */
+    filename?: string;
+  }>;
 }
 
 export function newJobId(): string {

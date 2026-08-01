@@ -1,6 +1,7 @@
 import { probeCapabilities } from "./capabilities";
 import { FORMATS, renameTo, type FormatId } from "./formats";
 import { imageEngine } from "./engines/imageEngine";
+import { pdfEngine } from "./engines/pdfEngine";
 import {
   ConversionError,
   type ConvertOptions,
@@ -18,7 +19,7 @@ import {
  * next capable thing. That is prime directive 3.
  */
 
-const ENGINES: Engine[] = [imageEngine];
+const ENGINES: Engine[] = [imageEngine, pdfEngine];
 
 /** Registration point for the ffmpeg and WebCodecs engines in P2. */
 export function registerEngine(engine: Engine): void {
@@ -65,10 +66,12 @@ export async function convert(
   for (const engine of candidates) {
     if (signal?.aborted) throw new ConversionError("internal", "Cancelled");
     try {
-      const { blob } = await engine.convert(file, source, target, options, onProgress, signal);
+      const { blob, filename } = await engine.convert(
+        file, source, target, options, onProgress, signal,
+      );
       return {
         blob,
-        filename: renameTo(file.name, target),
+        filename: filename ?? renameTo(file.name, target),
         bytesIn: file.size,
         bytesOut: blob.size,
         engineId: engine.id,

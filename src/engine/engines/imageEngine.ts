@@ -30,6 +30,24 @@ export function resetImageWorker(): void {
   workerHandle = null;
 }
 
+/**
+ * Buffer-level conversion, for engines that need pixels re-encoded mid-pipeline.
+ *
+ * The PDF engine uses this: pdf.js renders pages to PNG, and if the user asked
+ * for JPEG or WebP those pages come back through here. Sharing the one worker
+ * means the PDF path never grows a second, drifting copy of the encoders.
+ */
+export async function convertImageBuffer(
+  buffer: ArrayBuffer,
+  source: FormatId,
+  target: FormatId,
+  mime: string,
+  options: ConvertOptions,
+): Promise<ArrayBuffer> {
+  const { api } = getWorker();
+  return api.convert(Comlink.transfer(buffer, [buffer]), source, target, mime, options);
+}
+
 const IMAGE_SOURCES: ReadonlySet<FormatId> = new Set([
   "jpeg",
   "png",

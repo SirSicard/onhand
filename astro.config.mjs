@@ -12,7 +12,44 @@ export default defineConfig({
   output: "static",
   integrations: [react()],
   vite: {
-    plugins: [tailwindcss()],
+    plugins: [
+      tailwindcss(),
+      {
+        // Serve the test corpus at /fixtures/* during development only.
+        //
+        // This exists because the alternative bit twice: fixtures live outside
+        // public/, so fetching one returned the dev server's index.html, and a
+        // "PNG" that is actually 4,305 bytes of HTML fails to decode in a way
+        // that looks exactly like a broken codec. Twenty minutes went into
+        // blaming jSquash the first time and pdf-lib the second.
+        //
+        // Dev-only, so the 2.2 MB corpus never ships.
+        name: "onhand:serve-fixtures-in-dev",
+        apply: "serve",
+        configureServer(server) {
+          server.middlewares.use("/fixtures", (req, res, next) => {
+            const name = decodeURIComponent((req.url ?? "").split("?")[0] ?? "").replace(/^\//, "");
+            // No traversal, no directory listing — just the corpus.
+            if (!name || name.includes("/") || name.includes("..")) return next();
+            const path = new URL(`./fixtures/${name}`, import.meta.url);
+            import("node:fs").then(({ readFile }) => {
+              readFile(path, (err, data) => {
+                if (err) {
+                  // Fail LOUDLY. A missing fixture must never masquerade as HTML.
+                  res.statusCode = 404;
+                  res.setHeader("content-type", "text/plain");
+                  res.end(`fixture not found: ${name}`);
+                  return;
+                }
+                res.setHeader("content-type", "application/octet-stream");
+                res.setHeader("cache-control", "no-store");
+                res.end(data);
+              });
+            });
+          });
+        },
+      },
+    ],
     worker: {
       // Codec workers are ES modules (Comlink + dynamic wasm imports).
       format: "es",
