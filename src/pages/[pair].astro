@@ -74,6 +74,7 @@ const faqs = [
   },
 ];
 
+const ogImage = `/og/${slugFor(pair)}.png`;
 const description = `Convert ${from.label} to ${to.label} in your browser. Nothing is uploaded — the conversion runs on your own device. Free, no account, no file size cap.`;
 
 // FAQPage structured data, matching the questions actually on the page. Marking
@@ -90,7 +91,11 @@ const faqSchema = {
 };
 ---
 
-<Base title={`${title} converter — nothing uploaded | Onhand`} description={description}>
+<Base
+  title={`${title} converter — nothing uploaded | Onhand`}
+  description={description}
+  ogImage={ogImage}
+>
   <main class="mx-auto flex min-h-dvh max-w-3xl flex-col gap-10 px-6 py-16">
     <header>
       <nav class="mb-6 text-sm text-glass-600 dark:text-glass-400">
