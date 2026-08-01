@@ -171,3 +171,24 @@ us nothing and lies to no one.
   `crossOriginIsolated: true`, SharedArrayBuffer available, **zero external
   requests**, `_headers` applied by CF Pages, `_astro/*` immutable-cached. CI green
   in 48s. GitHub repo is PRIVATE for now; flip to public when P1 renders something.
+
+### P1 errata
+- 2026-08-01: Vite dep pre-bundling rewrites `import.meta.url` inside codec packages,
+  breaking their relative `.wasm` paths so the request 404s and the dev server
+  returns index.html. Surfaces as `WebAssembly.instantiate(): expected magic word
+  00 61 73 6d, found 3c 21 64 6f` ("<!do"). ALL wasm codec packages must go in
+  `optimizeDeps.exclude`.
+- 2026-08-01: `@jsquash/avif` v2 takes plain 0-100 `quality`. Older wrappers used an
+  inverted 0-63 `cqLevel`; passing that is silently ignored and every AVIF lands at
+  default quality regardless of preset. Verified monotonic q55<q80<q95 in-browser.
+- 2026-08-01: jSquash decoders return `ImageData | null`. Null = codec ran, produced
+  nothing (truncated/malformed input) and must be raised, not passed downstream.
+- 2026-08-01: **`createImageBitmap` does not accept SVG blobs in Chromium** (Firefox
+  only). Browser-native SVG rasterisation is not viable — use @resvg/resvg-wasm,
+  which also works in a worker.
+- 2026-08-01: **Upload counter was measuring the wrong direction.** First version
+  summed `PerformanceResourceTiming.transferSize`, which is bytes RECEIVED — merely
+  loading a sample image made it read "600 B uploaded", disproving the one claim the
+  product makes. `PerformanceResourceTiming` exposes no request-body size, so
+  `uploadMonitor.ts` wraps fetch/XHR/sendBeacon and measures request bodies. Locked
+  by 6 tests incl. "does not count downloads".

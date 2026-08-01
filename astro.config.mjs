@@ -22,8 +22,24 @@ export default defineConfig({
       assetsInlineLimit: 0,
     },
     optimizeDeps: {
-      // Emscripten/wasm packages break under Vite's dep pre-bundling.
-      exclude: ["@ffmpeg/ffmpeg", "@ffmpeg/util"],
+      // Codec packages locate their .wasm via `new URL('./x.wasm', import.meta.url)`.
+      // Vite's dep pre-bundling rewrites import.meta.url, so the wasm request
+      // resolves to a path that doesn't exist and the dev server answers with
+      // index.html — which surfaces as the wonderfully cryptic
+      //   "WebAssembly.instantiate(): expected magic word 00 61 73 6d, found 3c 21 64 6f"
+      // (3c 21 64 6f is "<!do"). Excluding them keeps the URLs intact.
+      exclude: [
+        "@jsquash/jpeg",
+        "@jsquash/png",
+        "@jsquash/webp",
+        "@jsquash/avif",
+        "@jsquash/resize",
+        "@jsquash/oxipng",
+        "libheif-js",
+        "@resvg/resvg-wasm",
+        "@ffmpeg/ffmpeg",
+        "@ffmpeg/util",
+      ],
     },
   },
   server: {

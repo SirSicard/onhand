@@ -1,5 +1,6 @@
 ---
 import Base from "../layouts/Base.astro";
+import Converter from "../components/Converter";
 import EnvironmentReport from "../components/EnvironmentReport";
 ---
 
@@ -7,7 +8,7 @@ import EnvironmentReport from "../components/EnvironmentReport";
   title="Onhand — convert any file, nothing uploaded"
   description="Free file converter that runs entirely in your browser. Images, audio and video — including video — converted on your own device. Nothing is ever uploaded."
 >
-  <main class="mx-auto flex min-h-dvh max-w-3xl flex-col items-center justify-center gap-10 px-6 py-16">
+  <main class="mx-auto flex min-h-dvh max-w-3xl flex-col gap-10 px-6 py-16">
     <header class="text-center">
       <h1 class="text-4xl font-semibold tracking-tight sm:text-5xl">Onhand</h1>
       <p class="mt-4 text-lg text-glass-600 dark:text-glass-400">
@@ -16,19 +17,18 @@ import EnvironmentReport from "../components/EnvironmentReport";
       </p>
     </header>
 
-    <section
-      class="w-full rounded-xl border border-glass-200 bg-white/60 p-6 dark:border-glass-800 dark:bg-glass-900/60"
-    >
-      <h2 class="mb-4 text-sm font-semibold uppercase tracking-wide text-glass-400">
-        This browser
-      </h2>
-      <EnvironmentReport client:load />
-    </section>
+    <Converter client:load />
+
+    <details class="rounded-xl border border-glass-200 p-4 dark:border-glass-800">
+      <summary class="cursor-pointer text-sm font-semibold text-glass-400">
+        What this browser can do
+      </summary>
+      <div class="mt-4"><EnvironmentReport client:visible /></div>
+    </details>
 
     <footer class="text-center text-sm text-glass-400">
       <p>
-        Groundwork only — the converter itself lands next.
-        <br />
+        Images now. Audio and video next.<br />
         MIT licensed. No accounts, no telemetry, no ads.
       </p>
     </footer>
