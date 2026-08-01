@@ -18,6 +18,11 @@
   --color-copper-400: #dc9a63;
   --color-copper-500: #c87d42;
   --color-copper-600: #a86233;
+  /* Accessible pair. copper-500 is 3.25:1 against white and 3.03:1 on the light
+     background — it reads well and fails WCAG AA, which is exactly the trap.
+     Use 600 behind white text (4.71:1) and 700 for text on light (5.35:1);
+     500 stays for borders, rings and hover, where contrast rules do not bite. */
+  --color-copper-700: #96562c;
 
   --font-sans:
     ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;

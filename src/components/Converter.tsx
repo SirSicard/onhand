@@ -6,6 +6,7 @@ import { installUploadMonitor, getSentBytes, onSentBytesChange } from "@/engine/
 import { onEngineLoad, FFMPEG_DOWNLOAD_MB } from "@/engine/engineLoad";
 import { saveBlob, saveZip } from "@/engine/download";
 import { disambiguate, filesFromDrop, rememberTarget, targetForSource } from "@/engine/queue";
+import { offlineStatusFor, type OfflineStatus } from "@/engine/offline";
 
 /**
  * `quality` drives image encoders, `audioBitrateKbps` the audio ones. Both are
@@ -52,6 +53,8 @@ export default function Converter() {
   });
   const inputRef = useRef<HTMLInputElement>(null);
   const abortControllers = useRef(new Map<string, AbortController>());
+
+  const [offline, setOffline] = useState<OfflineStatus | null>(null);
 
   useEffect(() => onEngineLoad(setEngineLoad), []);
 
@@ -225,6 +228,35 @@ export default function Converter() {
     return () => window.removeEventListener("paste", onPaste);
   }, [addFiles]);
 
+  /**
+   * Offline capability for the pairs actually queued.
+   *
+   * Recomputed after conversions finish, because that is when a codec lands in
+   * the cache and the answer changes from "no" to "yes". A badge that only
+   * checks on mount tells people they have no offline support immediately after
+   * they earned it.
+   */
+  const pairKey = jobs.map((j) => `${j.source}>${j.target}`).join(",");
+  useEffect(() => {
+    if (jobs.length === 0) return setOffline(null);
+    let alive = true;
+    void (async () => {
+      const results = await Promise.all(jobs.map((j) => offlineStatusFor(j.source, j.target)));
+      if (!alive) return;
+      // The queue is offline-capable only if EVERY pair in it is. Claiming
+      // otherwise would be true on average and wrong for the file that matters.
+      setOffline({
+        ready: results.every((r) => r.ready),
+        pairAvailable: results.every((r) => r.pairAvailable),
+        needsNothingExtra: results.every((r) => r.needsNothingExtra),
+      });
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pairKey, jobs.filter((j) => j.status === "done").length]);
+
   const done = jobs.filter((j) => j.status === "done");
   const running = jobs.filter((j) => j.status === "running");
   const pending = jobs.some((j) => j.status === "queued" || j.status === "failed");
@@ -337,7 +369,7 @@ export default function Converter() {
                   aria-pressed={preset === key}
                   className={`rounded-md px-3 py-1 text-sm transition-colors motion-reduce:transition-none ${
                     preset === key
-                      ? "bg-copper-500 text-white"
+                      ? "bg-copper-600 text-white"
                       : "text-glass-600 hover:text-copper-500 dark:text-glass-400"
                   }`}
                 >
@@ -370,7 +402,7 @@ export default function Converter() {
             <button
               onClick={runAll}
               disabled={!pending}
-              className="rounded-lg bg-copper-500 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+              className="rounded-lg bg-copper-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
             >
               Convert {jobs.filter((j) => j.status === "queued").length || ""}
             </button>
@@ -387,8 +419,19 @@ export default function Converter() {
               </button>
             )}
 
-            <span className="ml-auto font-mono text-xs text-glass-400">
-              ↑ {uploadedBytes === 0 ? "0 bytes" : humanSize(uploadedBytes)} uploaded
+            <span className="ml-auto flex items-center gap-3 font-mono text-xs text-glass-600 dark:text-glass-400">
+              {offline?.pairAvailable && (
+                <span
+                  title={
+                    offline.needsNothingExtra
+                      ? "These formats use codecs already built into your browser."
+                      : "The codecs for these formats are cached on this device."
+                  }
+                >
+                  ✈ works offline
+                </span>
+              )}
+              <span>↑ {uploadedBytes === 0 ? "0 bytes" : humanSize(uploadedBytes)} uploaded</span>
             </span>
           </div>
 
@@ -396,7 +439,7 @@ export default function Converter() {
             <button
               onClick={() => setAdvanced((v) => !v)}
               aria-expanded={advanced}
-              className="text-xs text-glass-400 hover:text-copper-500"
+              className="text-xs text-glass-600 dark:text-glass-400 hover:text-copper-500"
             >
               {advanced ? "▾" : "▸"} Advanced
             </button>
@@ -425,7 +468,7 @@ export default function Converter() {
                   />
                   Strip metadata
                 </label>
-                <span className="text-xs text-glass-400">
+                <span className="text-xs text-glass-600 dark:text-glass-400">
                   On by default. Photos carry the GPS coordinates of where they were taken.
                 </span>
               </div>
@@ -527,7 +570,10 @@ function JobRow({
           <>
             {humanSize(job.file.size)}
             {losslessImpossible && (
-              <span className="ml-1 text-xs text-glass-400" title="This format is always lossy">
+              <span
+                className="ml-1 text-xs text-glass-600 dark:text-glass-400"
+                title="This format is always lossy"
+              >
                 (lossy format)
               </span>
             )}
@@ -539,7 +585,7 @@ function JobRow({
         {job.status === "done" && job.result && (
           <>
             {humanSize(job.result.bytesIn)} → {humanSize(job.result.bytesOut)}{" "}
-            <span className={delta > 0 ? "text-copper-500" : ""}>
+            <span className={delta > 0 ? "text-copper-700 dark:text-copper-400" : ""}>
               ({delta > 0 ? "−" : "+"}
               {Math.abs(Math.round(delta * 100))}%)
             </span>
@@ -553,7 +599,7 @@ function JobRow({
       {job.status === "done" && job.result && (
         <button
           onClick={() => void saveBlob(job.result!.blob, job.result!.filename)}
-          className="rounded bg-copper-500 px-3 py-1 text-white"
+          className="rounded bg-copper-600 px-3 py-1 text-white"
         >
           Save
         </button>
@@ -563,7 +609,7 @@ function JobRow({
         <button
           onClick={() => onCancel(job.id)}
           aria-label={`Cancel converting ${job.file.name}`}
-          className="rounded px-2 py-1 text-glass-400 hover:text-copper-500"
+          className="rounded px-2 py-1 text-glass-600 dark:text-glass-400 hover:text-copper-500"
         >
           Stop
         </button>
@@ -571,14 +617,14 @@ function JobRow({
         <button
           onClick={() => onRemove(job.id)}
           aria-label={`Remove ${job.file.name} from the queue`}
-          className="rounded px-2 py-1 text-glass-400 hover:text-copper-500"
+          className="rounded px-2 py-1 text-glass-600 dark:text-glass-400 hover:text-copper-500"
         >
           ✕
         </button>
       )}
 
       {job.error?.suggestion && (
-        <p className="w-full text-xs text-glass-400">{job.error.suggestion}</p>
+        <p className="w-full text-xs text-glass-600 dark:text-glass-400">{job.error.suggestion}</p>
       )}
     </li>
   );

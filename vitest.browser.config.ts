@@ -1,4 +1,5 @@
 import { defineConfig } from "vitest/config";
+import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
 
@@ -18,6 +19,12 @@ import { readFileSync } from "node:fs";
  */
 export default defineConfig({
   plugins: [
+    // Tailwind must run here too, or `@import "tailwindcss"` stays raw and
+    // every utility class is inert. axe then measures default black-on-white
+    // and reports flawless contrast for a component shipping 2.7:1 grey —
+    // which is exactly what happened: this suite passed while Lighthouse
+    // failed the real page.
+    tailwindcss(),
     {
       // Same dev-only fixture route as astro.config, so browser tests fetch real
       // bytes rather than an HTML fallback that fails like a broken codec.

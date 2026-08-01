@@ -1,36 +1,31 @@
-# build output
-dist/
-.astro/
-
-# deps
-node_modules/
-
-# env
-.env
-.env.production
-.dev.vars
-
-# macOS
-.DS_Store
-
-# logs
-*.log
-npm-debug.log*
-pnpm-debug.log*
-
-# editors
-.vscode/
-.idea/
-
-# test artifacts
-coverage/
-test-results/
-playwright-report/
 
 # 32 MB ffmpeg core, copied from node_modules by scripts/sync-ffmpeg-core.mjs
-public/ffmpeg/
-
-# vitest browser-mode writes a screenshot when a test FAILS. They are debris
-# from a red run, not visual baselines — several were committed in P1 recording
+# build output
+# deps
+# editors
+# env
 # failures that have since been fixed.
+# from a red run, not visual baselines — several were committed in P1 recording
+# logs
+# macOS
+# red run, not a visual baseline.
+# test artifacts
+# vitest browser mode writes a screenshot when a test FAILS — debris from a
+# vitest browser-mode writes a screenshot when a test FAILS. They are debris
+*.log
+.DS_Store
+.astro/
+.dev.vars
+.env
+.env.production
+.idea/
+.vscode/
+coverage/
+dist/
+node_modules/
+npm-debug.log*
+playwright-report/
+pnpm-debug.log*
+public/ffmpeg/
 src/**/__screenshots__/
+test-results/

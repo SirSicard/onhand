@@ -24,7 +24,7 @@ export default function EnvironmentReport() {
 
   if (!caps) {
     return (
-      <p className="text-sm text-glass-400" aria-live="polite">
+      <p className="text-sm text-glass-600 dark:text-glass-400" aria-live="polite">
         Checking what this browser can do…
       </p>
     );
@@ -93,7 +93,9 @@ function Row({ label, ok, detail }: { label: string; ok: boolean; detail: string
     <div className="flex items-baseline gap-3 border-b border-glass-200 py-2 last:border-0 dark:border-glass-800">
       <span
         aria-hidden="true"
-        className={ok ? "text-copper-500" : "text-glass-400"}
+        className={
+          ok ? "text-copper-700 dark:text-copper-400" : "text-glass-600 dark:text-glass-400"
+        }
         style={{ fontFamily: "var(--font-mono)" }}
       >
         {ok ? "●" : "○"}

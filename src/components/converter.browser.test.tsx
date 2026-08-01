@@ -2,6 +2,11 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react";
 import axe from "axe-core";
+// The real stylesheet, not a stand-in. Without it every Tailwind class is inert,
+// so axe measures default black-on-white and reports perfect contrast for a
+// component that ships 2.7:1 grey. A contrast test without the app's CSS is a
+// test of nothing.
+import "@/styles/global.css";
 import Converter from "./Converter";
 
 /**
@@ -161,13 +166,39 @@ describe("keyboard operation", () => {
 });
 
 describe("accessibility", () => {
+  /**
+   * Run axe against the component on the app's real background.
+   *
+   * Both details matter. Without the background, axe cannot resolve what the
+   * text sits on and files contrast problems as INCOMPLETE rather than a
+   * violation — so a version of this test that only read `violations` passed
+   * while light mode shipped 2.7:1 grey-on-white for weeks. Lighthouse caught
+   * it; this did not. Incompletes for contrast are now treated as failures,
+   * because "could not determine" is not the same as "fine".
+   */
   async function violations(impacts: string[]) {
+    // Match the app's own background so axe can resolve what text sits on.
+    container.style.background = "#f6f7f9";
     const results = await axe.run(container, {
-      resultTypes: ["violations"],
       // Landmark/region rules judge a whole page; this mounts one component.
       rules: { region: { enabled: false } },
     });
-    return results.violations.filter((v) => impacts.includes(v.impact ?? ""));
+    const found = results.violations.filter((v) => impacts.includes(v.impact ?? ""));
+
+    // Incompletes for contrast count, with one exception: axe cannot evaluate
+    // an element whose only content is a glyph like "✕" and says so. That is a
+    // limitation of the check, not a finding. Everything else it could not
+    // resolve — most importantly "no background colour" — stays a failure,
+    // because that is the bucket the light-mode bug was hiding in.
+    const unresolved = results.incomplete
+      .filter((v) => v.id === "color-contrast")
+      .map((v) => ({
+        ...v,
+        nodes: v.nodes.filter((n) => !/only non-text characters/i.test(n.any?.[0]?.message ?? "")),
+      }))
+      .filter((v) => v.nodes.length > 0);
+
+    return [...found, ...unresolved];
   }
 
   it("has no critical or serious violations in the zero state", async () => {
@@ -189,7 +220,9 @@ describe("accessibility", () => {
 
     const found = await violations(["critical", "serious"]);
     expect(
-      found.map((v) => `${v.id}: ${v.nodes[0]?.failureSummary?.split("\n")[0]}`),
+      found.map(
+        (v) => `${v.id}: ${(v.nodes[0]?.failureSummary ?? v.nodes[0]?.html ?? "").split("\n")[0]}`,
+      ),
       "axe violations",
     ).toEqual([]);
   }, 60_000);

@@ -395,3 +395,62 @@ without real rendering.
 critical or serious violations in both the empty and populated states, a 20-file
 / 20 MB zip verified readable entry-by-entry, and the counter reads
 `↑ 0 bytes uploaded` after a full session.
+
+## P4 — PWA + polish — DONE 2026-08-01
+
+Offline-capable, not installable — a tool people use twice a year does not need
+an install prompt. Service worker is hand-rolled (`scripts/build-sw.mjs`) rather
+than Workbox: the caching rules are unusual enough that a generic tool would
+need as much configuration as this has code.
+
+**Two cache tiers, and the split is the design.** The shell (253 KB — HTML,
+CSS, React, the Converter and its static import graph) is precached on install.
+The codecs are not: caching 9.7 MB on someone who came to convert a PNG defeats
+the point. They land in the cache the first time a conversion pulls one.
+
+**The offline badge is honest per pair.** "A service worker exists therefore
+offline works" is false for any pair whose codec has never been downloaded. The
+page asks the worker what it actually holds and answers for the queued pairs
+specifically — and correctly reports that most audio and video work offline
+immediately, because WebCodecs uses codecs already in the browser.
+
+### Found by building it
+- **The precache list stopped at what the HTML references**, but a module's
+  static import graph goes deeper. Missing one dependency fails the whole module
+  and is reported against the entry chunk — "Failed to fetch dynamically
+  imported module: Converter.js" while Converter.js sits in the cache.
+- **Content-hashed chunks were cached in the VERSIONED shell**, which `activate`
+  wipes on every deploy. Every deploy silently destroyed offline support until
+  the user repeated every conversion. They are content-hashed, so they can never
+  be stale — they belong in the unversioned cache.
+- **The worker replied to the client, not to the transferred port**, so the
+  badge's `MessageChannel` never resolved. It timed out and resolved empty, so
+  the badge simply never appeared rather than erroring.
+- **Astro islands name their chunks with `component-url`**, not `src`, so a
+  src/href-only scrape produced a 20 KB "shell" that could not render.
+
+### Colour contrast, and why one test was theatre
+Lighthouse: **performance 96, accessibility 100, best-practices 100, SEO 100.**
+
+Getting there found two real failures:
+- `glass-400` on the light background is **2.7:1**, needing 4.5:1. Dark mode was
+  fine at 6.6:1, so light mode had been failing since P0.
+- White on `copper-500` is **3.25:1**. Buttons now use `copper-600` (4.71:1) and
+  copper text on light uses `copper-700` (5.35:1); 500 stays for borders, rings
+  and hover, where the rule does not bite.
+
+**The axe test in the component suite could not have caught either**, and passed
+throughout. `vitest.browser.config.ts` had no Tailwind plugin, so `@import
+"tailwindcss"` stayed raw, every utility class was inert, and axe measured
+default black-on-white — reporting flawless contrast for a component shipping
+2.7:1 grey. Verified the fix by reintroducing the bug: the test now fails on it.
+
+**And Lighthouse could not have caught the second one**, because it only ever
+loads the zero state, which has no buttons. The two checks are complementary,
+which is the actual lesson.
+
+**AC-P4:** airplane-mode heic→jpg verified by **killing the server**, not
+simulating offline — page rendered from cache, conversion completed 25.7 KB →
+22.2 KB, counter read zero. Lighthouse ≥ 95 on all four categories. (The PWA
+category no longer exists in Lighthouse 12; offline was verified directly
+instead, which is a stronger test than the audit was.)

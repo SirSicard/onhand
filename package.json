@@ -4,7 +4,7 @@
   "private": true,
   "license": "MIT",
   "type": "module",
-  "description": "Every file converter on one page. Nothing is ever uploaded — including video.",
+  "description": "Every file converter on one page. Nothing is ever uploaded \u2014 including video.",
   "engines": {
     "node": ">=22"
   },
@@ -24,7 +24,9 @@
     "predev": "node scripts/sync-ffmpeg-core.mjs",
     "prebuild": "node scripts/sync-ffmpeg-core.mjs",
     "fixtures:av": "python3 fixtures/generate_av.py",
-    "serve:dist": "node scripts/serve-dist.mjs"
+    "serve:dist": "node scripts/serve-dist.mjs",
+    "postbuild": "node scripts/build-sw.mjs",
+    "og": "node scripts/make-og.mjs"
   },
   "dependencies": {
     "@astrojs/react": "^4.4.0",
