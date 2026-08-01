@@ -237,11 +237,18 @@ export default function Converter() {
    * they earned it.
    */
   const pairKey = jobs.map((j) => `${j.source}>${j.target}`).join(",");
+  const doneCount = jobs.filter((j) => j.status === "done").length;
   useEffect(() => {
-    if (jobs.length === 0) return setOffline(null);
+    if (!pairKey) return setOffline(null);
     let alive = true;
     void (async () => {
-      const results = await Promise.all(jobs.map((j) => offlineStatusFor(j.source, j.target)));
+      // Read the pairs back out of the key rather than closing over `jobs`.
+      // Depending on `jobs` would re-run this on every progress tick, since the
+      // array is rebuilt each time; closing over it without declaring it needs
+      // the lint rule silenced, which hides genuine staleness. The key IS the
+      // data this effect needs, so it can be the only dependency.
+      const pairs = pairKey.split(",").map((p) => p.split(">") as [FormatId, FormatId]);
+      const results = await Promise.all(pairs.map(([s, t]) => offlineStatusFor(s, t)));
       if (!alive) return;
       // The queue is offline-capable only if EVERY pair in it is. Claiming
       // otherwise would be true on average and wrong for the file that matters.
@@ -254,8 +261,7 @@ export default function Converter() {
     return () => {
       alive = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pairKey, jobs.filter((j) => j.status === "done").length]);
+  }, [pairKey, doneCount]);
 
   const done = jobs.filter((j) => j.status === "done");
   const running = jobs.filter((j) => j.status === "running");
