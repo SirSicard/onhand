@@ -1,4 +1,5 @@
 import * as Comlink from "comlink";
+import { createWorkerHost } from "../workerHost";
 import { FORMATS, isAudioExtraction, type FormatId } from "../formats";
 import { ConversionError, type ConvertOptions, type Engine, type ProgressUpdate } from "../types";
 import type { MediaWorkerApi } from "../workers/media.worker";
@@ -13,29 +14,17 @@ import type { MediaWorkerApi } from "../workers/media.worker";
  * engine says the job isn't its.
  */
 
-let handle: { worker: Worker; api: Comlink.Remote<MediaWorkerApi> } | null = null;
-
-function getWorker() {
-  if (!handle) {
-    const worker = new Worker(new URL("../workers/media.worker.ts", import.meta.url), {
+const host = createWorkerHost<MediaWorkerApi>(
+  () =>
+    new Worker(new URL("../workers/media.worker.ts", import.meta.url), {
       type: "module",
       name: "onhand-media",
-    });
-    // Only a worker-level failure discards the instance. Per-file errors must
-    // not, because the worker is shared and terminating it leaves every
-    // concurrent job's promise unsettled — see imageEngine for the measurement.
-    worker.addEventListener("error", () => {
-      if (handle?.worker === worker) handle = null;
-      worker.terminate();
-    });
-    handle = { worker, api: Comlink.wrap<MediaWorkerApi>(worker) };
-  }
-  return handle;
-}
+    }),
+  "media",
+);
 
 export function resetMediaWorker(): void {
-  handle?.worker.terminate();
-  handle = null;
+  host.reset();
 }
 
 const AV_KINDS = new Set(["audio", "video"]);
@@ -64,7 +53,6 @@ export const mediaEngine: Engine = {
   ): Promise<{ blob: Blob }> {
     if (signal?.aborted) throw new ConversionError("internal", "Cancelled");
 
-    const { api } = getWorker();
     const jobId = crypto.randomUUID();
 
     // Extraction is the one pair where dropping the video track is the intent
@@ -73,18 +61,20 @@ export const mediaEngine: Engine = {
       ? { ...options, audioOnly: true }
       : options;
 
-    const onAbort = () => void api.cancel(jobId);
+    const onAbort = () => void host.call((api) => api.cancel(jobId));
     signal?.addEventListener("abort", onAbort, { once: true });
 
     onProgress({ progress: 0 });
 
     try {
-      const { buffer } = await api.convert(
-        file,
-        target,
-        effective,
-        jobId,
-        Comlink.proxy((p: number | null) => onProgress({ progress: p })),
+      const { buffer } = await host.call((api) =>
+        api.convert(
+          file,
+          target,
+          effective,
+          jobId,
+          Comlink.proxy((p: number | null) => onProgress({ progress: p })),
+        ),
       );
       onProgress({ progress: 1 });
       return { blob: new Blob([buffer], { type: FORMATS[target].mime }) };

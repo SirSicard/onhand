@@ -1,4 +1,5 @@
 import * as Comlink from "comlink";
+import { createWorkerHost } from "../workerHost";
 import { zipSync } from "fflate";
 import { FORMATS, type FormatId } from "../formats";
 import { ConversionError, type ConvertOptions, type Engine, type ProgressUpdate } from "../types";
@@ -14,26 +15,17 @@ import { convertImageBuffer } from "./imageEngine";
  *   image → PDF : one image per page, page sized to the image.
  */
 
-let handle: { worker: Worker; api: Comlink.Remote<PdfWorkerApi> } | null = null;
-
-function getWorker() {
-  if (!handle) {
-    const worker = new Worker(new URL("../workers/pdf.worker.ts", import.meta.url), {
+const host = createWorkerHost<PdfWorkerApi>(
+  () =>
+    new Worker(new URL("../workers/pdf.worker.ts", import.meta.url), {
       type: "module",
       name: "onhand-pdf",
-    });
-    worker.addEventListener("error", () => {
-      if (handle?.worker === worker) handle = null;
-      worker.terminate();
-    });
-    handle = { worker, api: Comlink.wrap<PdfWorkerApi>(worker) };
-  }
-  return handle;
-}
+    }),
+  "PDF",
+);
 
 export function resetPdfWorker(): void {
-  handle?.worker.terminate();
-  handle = null;
+  host.reset();
 }
 
 /** Formats pdf-lib can embed directly; everything else is transcoded to PNG first. */
@@ -73,12 +65,11 @@ export const pdfEngine: Engine = {
     if (signal?.aborted) throw new ConversionError("internal", "Cancelled");
     onProgress({ progress: null });
 
-    const { api } = getWorker();
     const buffer = await file.arrayBuffer();
 
     try {
       if (source === "pdf") {
-        const pages = await api.pdfToImages(Comlink.transfer(buffer, [buffer]));
+        const pages = await host.call((api) => api.pdfToImages(Comlink.transfer(buffer, [buffer])));
         if (pages.length === 0) {
           throw new ConversionError("corrupt", "This PDF has no pages.");
         }
@@ -134,7 +125,9 @@ export const pdfEngine: Engine = {
         embedMime = "image/png";
       }
 
-      const out = await api.imagesToPdf([{ buffer: embedBuffer, mime: embedMime }], options);
+      const out = await host.call((api) =>
+        api.imagesToPdf([{ buffer: embedBuffer, mime: embedMime }], options),
+      );
       onProgress({ progress: 1 });
       return { blob: new Blob([out], { type: "application/pdf" }) };
     } catch (cause) {

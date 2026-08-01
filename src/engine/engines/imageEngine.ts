@@ -1,4 +1,5 @@
 import * as Comlink from "comlink";
+import { createWorkerHost } from "../workerHost";
 import { FORMATS, type FormatId } from "../formats";
 import { ConversionError, type ConvertOptions, type Engine, type ProgressUpdate } from "../types";
 import type { ImagesWorkerApi } from "../workers/images.worker";
@@ -11,30 +12,18 @@ import type { ImagesWorkerApi } from "../workers/images.worker";
  * difference between seconds and minutes.
  */
 
-let workerHandle: { worker: Worker; api: Comlink.Remote<ImagesWorkerApi> } | null = null;
-
-function getWorker() {
-  if (!workerHandle) {
-    const worker = new Worker(new URL("../workers/images.worker.ts", import.meta.url), {
+const host = createWorkerHost<ImagesWorkerApi>(
+  () =>
+    new Worker(new URL("../workers/images.worker.ts", import.meta.url), {
       type: "module",
       name: "onhand-images",
-    });
-    // A worker-level failure (OOM kill, module load error) is the ONLY case that
-    // justifies discarding the instance. Per-file decode errors must not, since
-    // the worker is shared and terminating it strands every concurrent job.
-    worker.addEventListener("error", () => {
-      if (workerHandle?.worker === worker) workerHandle = null;
-      worker.terminate();
-    });
-    workerHandle = { worker, api: Comlink.wrap<ImagesWorkerApi>(worker) };
-  }
-  return workerHandle;
-}
+    }),
+  "image",
+);
 
 /** Drop the worker so a crashed instance doesn't poison every later job. */
 export function resetImageWorker(): void {
-  workerHandle?.worker.terminate();
-  workerHandle = null;
+  host.reset();
 }
 
 /**
@@ -51,8 +40,9 @@ export async function convertImageBuffer(
   mime: string,
   options: ConvertOptions,
 ): Promise<ArrayBuffer> {
-  const { api } = getWorker();
-  return api.convert(Comlink.transfer(buffer, [buffer]), source, target, mime, options);
+  return host.call((api) =>
+    api.convert(Comlink.transfer(buffer, [buffer]), source, target, mime, options),
+  );
 }
 
 const IMAGE_SOURCES: ReadonlySet<FormatId> = new Set([
@@ -94,15 +84,16 @@ export const imageEngine: Engine = {
     onProgress({ progress: null });
 
     const buffer = await file.arrayBuffer();
-    const { api } = getWorker();
 
     try {
-      const out = await api.convert(
-        Comlink.transfer(buffer, [buffer]),
-        source,
-        target,
-        file.type || FORMATS[source].mime,
-        options,
+      const out = await host.call((api) =>
+        api.convert(
+          Comlink.transfer(buffer, [buffer]),
+          source,
+          target,
+          file.type || FORMATS[source].mime,
+          options,
+        ),
       );
       onProgress({ progress: 1 });
       return { blob: new Blob([out], { type: FORMATS[target].mime }) };
