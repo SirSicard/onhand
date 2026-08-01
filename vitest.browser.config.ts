@@ -58,6 +58,12 @@ export default defineConfig({
       "@jsquash/oxipng",
       "libheif-js",
       "@resvg/resvg-wasm",
+      // @ffmpeg/ffmpeg creates its own worker via `new Worker(new URL('./worker.js',
+      // import.meta.url))`. The dep optimizer rewrites that URL to a file it never
+      // emits, and the failure mode is the worst kind: ff.load() hangs forever
+      // with no error at all, because it is waiting for a message from a worker
+      // that was never constructed.
+      "@ffmpeg/ffmpeg",
     ],
   },
   test: {

@@ -1,19 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { convert } from "@/engine/broker";
 import {
-
   defaultTargetFor,
   detectFormat,
-  encodableFormats,
+  targetsFor,
   type FormatId,
 } from "@/engine/formats";
 import { ConversionError, newJobId, type Job } from "@/engine/types";
 import { installUploadMonitor, getSentBytes, onSentBytesChange } from "@/engine/uploadMonitor";
 
+// `quality` drives image encoders; `audioBitrateKbps` drives the audio ones.
+// Without the second field "Smallest" was a no-op on every audio and video job
+// — the control was there and did nothing.
 const PRESETS = {
-  smallest: { label: "Smallest", quality: 55 },
-  balanced: { label: "Balanced", quality: 80 },
-  best: { label: "Best", quality: 95 },
+  smallest: { label: "Smallest", quality: 55, audioBitrateKbps: 96 },
+  balanced: { label: "Balanced", quality: 80, audioBitrateKbps: 192 },
+  best: { label: "Best", quality: 95, audioBitrateKbps: 320 },
 } as const;
 type PresetKey = keyof typeof PRESETS;
 
@@ -88,7 +90,11 @@ export default function Converter() {
           job.file,
           job.source,
           job.target,
-          { quality: PRESETS[preset].quality, stripMetadata: true },
+          {
+            quality: PRESETS[preset].quality,
+            audioBitrateKbps: PRESETS[preset].audioBitrateKbps,
+            stripMetadata: true,
+          },
           ({ progress }) => update(job.id, { progress }),
         );
         update(job.id, { status: "done", progress: 1, result });
@@ -215,7 +221,7 @@ export default function Converter() {
                   aria-label={`Target format for ${job.file.name}`}
                   className="rounded border border-glass-200 bg-transparent px-2 py-1 dark:border-glass-800"
                 >
-                  {encodableFormats().map((f) => (
+                  {targetsFor(job.source).map((f) => (
                     <option key={f.id} value={f.id}>
                       {f.label}
                     </option>

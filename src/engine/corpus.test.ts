@@ -40,6 +40,31 @@ const EXPECTED: Record<string, { format: string; dim: string }> = {
   "two-page.pdf": { format: "pdf", dim: "n/a" },
   "vector.svg": { format: "svg", dim: "320x320" },
   "tiny-1x1.png": { format: "png", dim: "1x1" },
+
+  // Audio — the same 3s 440 Hz tone in every container, so any difference in
+  // the result is the container's doing and nothing else's.
+  "tone.wav": { format: "wav", dim: "n/a" },
+  "tone.mp3": { format: "mp3", dim: "n/a" },
+  "tone.m4a": { format: "m4a", dim: "n/a" },
+  "tone.aac": { format: "aac", dim: "n/a" },
+  "tone.ogg": { format: "ogg", dim: "n/a" },
+  "tone.opus": { format: "opus", dim: "n/a" },
+  "tone.flac": { format: "flac", dim: "n/a" },
+  "stereo.wav": { format: "wav", dim: "n/a" },
+
+  // Video — 3s 640x360 test pattern plus tone, except where noted.
+  "clip.mp4": { format: "mp4", dim: "640x360" },
+  "clip.mov": { format: "mov", dim: "640x360" },
+  "clip.webm": { format: "webm", dim: "640x360" },
+  "clip.mkv": { format: "mkv", dim: "640x360" },
+  "clip.avi": { format: "avi", dim: "640x360" },
+  "silent.mp4": { format: "mp4", dim: "640x360" },
+  // Odd dimensions: H.264 cannot encode them, so anything that doesn't round
+  // to even fails here rather than on someone's cropped phone video.
+  "portrait-odd.mp4": { format: "mp4", dim: "607x1079" },
+  // 90° display matrix — a correct conversion comes out 360x640, a naive one
+  // comes out 640x360 lying on its side.
+  "rotated.mov": { format: "mov", dim: "360x640" },
 };
 
 describe("test corpus", () => {

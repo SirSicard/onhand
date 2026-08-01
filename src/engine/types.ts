@@ -13,6 +13,26 @@ export interface ConvertOptions {
    * doing them harm, and nobody reads the advanced panel.
    */
   stripMetadata?: boolean;
+
+  /**
+   * Audio bitrate in kbps. Undefined means "match the source, or 192 if that
+   * can't be determined" — deliberately not a fixed default, because
+   * re-encoding a 320 kbps file down to 128 without being asked is destroying
+   * data the person never agreed to lose.
+   */
+  audioBitrateKbps?: number;
+
+  /**
+   * Video bitrate in kbps. Same rule: undefined means derive it from the source
+   * resolution rather than imposing a number.
+   */
+  videoBitrateKbps?: number;
+
+  /** Drop the video track entirely — the "just give me the audio" path. */
+  audioOnly?: boolean;
+
+  /** Trim to a sub-range, in seconds. Both ends optional. */
+  trim?: { start?: number; end?: number };
 }
 
 export type JobStatus = "queued" | "running" | "done" | "failed" | "cancelled";

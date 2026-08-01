@@ -4,7 +4,7 @@
   "private": true,
   "license": "MIT",
   "type": "module",
-  "description": "Every file converter on one page. Nothing is ever uploaded — including video.",
+  "description": "Every file converter on one page. Nothing is ever uploaded \u2014 including video.",
   "engines": {
     "node": ">=22"
   },
@@ -19,10 +19,17 @@
     "lint": "prettier --check .",
     "test:browser": "vitest run --config vitest.browser.config.ts",
     "test:browser:all": "ONHAND_ALL_BROWSERS=1 vitest run --config vitest.browser.config.ts",
-    "test:all": "pnpm test && pnpm test:browser"
+    "test:all": "pnpm test && pnpm test:browser",
+    "sync:ffmpeg": "node scripts/sync-ffmpeg-core.mjs",
+    "predev": "node scripts/sync-ffmpeg-core.mjs",
+    "prebuild": "node scripts/sync-ffmpeg-core.mjs",
+    "fixtures:av": "python3 fixtures/generate_av.py",
+    "serve:dist": "node scripts/serve-dist.mjs"
   },
   "dependencies": {
     "@astrojs/react": "^4.4.0",
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
     "@jsquash/avif": "^2.1.1",
     "@jsquash/jpeg": "^1.6.0",
     "@jsquash/oxipng": "^2.3.0",
@@ -34,6 +41,7 @@
     "comlink": "^4.4.2",
     "fflate": "^0.8.3",
     "libheif-js": "^1.19.8",
+    "mediabunny": "^1.52.1",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.2.108",
     "react": "^19.2.0",
@@ -42,6 +50,7 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
+    "@ffmpeg/core": "^0.12.10",
     "@tailwindcss/vite": "^4.1.0",
     "@types/node": "^26.1.2",
     "@types/react": "^19.2.0",

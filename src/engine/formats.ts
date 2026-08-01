@@ -20,9 +20,23 @@ export type FormatId =
   | "ico"
   | "svg"
   // documents
-  | "pdf";
+  | "pdf"
+  // audio
+  | "mp3"
+  | "wav"
+  | "m4a"
+  | "aac"
+  | "ogg"
+  | "opus"
+  | "flac"
+  // video
+  | "mp4"
+  | "mov"
+  | "webm"
+  | "mkv"
+  | "avi";
 
-export type Kind = "image" | "document";
+export type Kind = "image" | "document" | "audio" | "video";
 
 export interface FormatSpec {
   id: FormatId;
@@ -167,6 +181,153 @@ export const FORMATS: Record<FormatId, FormatSpec> = {
     encodable: true,
     lossy: false,
   },
+
+  // ── Audio ──────────────────────────────────────────────────────────────
+  // Note on `lossy`: it describes the FORMAT, and drives whether a quality
+  // control appears. WAV and FLAC get no slider because there is nothing to
+  // trade — showing one would imply a choice that does not exist.
+  mp3: {
+    // No browser has an MP3 *encoder* in WebCodecs — not one. Every "convert to
+    // mp3" job therefore goes through ffmpeg, which is precisely why the ffmpeg
+    // engine is not optional despite being 32 MB.
+    id: "mp3",
+    label: "MP3",
+    kind: "audio",
+    ext: "mp3",
+    extensions: ["mp3"],
+    mime: "audio/mpeg",
+    decodable: true,
+    encodable: true,
+    lossy: true,
+  },
+  wav: {
+    id: "wav",
+    label: "WAV",
+    kind: "audio",
+    ext: "wav",
+    extensions: ["wav", "wave"],
+    mime: "audio/wav",
+    decodable: true,
+    encodable: true,
+    lossy: false,
+  },
+  m4a: {
+    id: "m4a",
+    label: "M4A",
+    kind: "audio",
+    ext: "m4a",
+    extensions: ["m4a", "m4b"],
+    mime: "audio/mp4",
+    decodable: true,
+    encodable: true,
+    lossy: true,
+  },
+  aac: {
+    // Raw ADTS stream rather than an MP4 container. Kept separate from m4a
+    // because they are not interchangeable despite both being "AAC".
+    id: "aac",
+    label: "AAC",
+    kind: "audio",
+    ext: "aac",
+    extensions: ["aac", "adts"],
+    mime: "audio/aac",
+    decodable: true,
+    encodable: true,
+    lossy: true,
+  },
+  ogg: {
+    id: "ogg",
+    label: "OGG",
+    kind: "audio",
+    ext: "ogg",
+    extensions: ["ogg", "oga"],
+    mime: "audio/ogg",
+    decodable: true,
+    encodable: true,
+    lossy: true,
+  },
+  opus: {
+    id: "opus",
+    label: "Opus",
+    kind: "audio",
+    ext: "opus",
+    extensions: ["opus"],
+    mime: "audio/opus",
+    decodable: true,
+    encodable: true,
+    lossy: true,
+  },
+  flac: {
+    id: "flac",
+    label: "FLAC",
+    kind: "audio",
+    ext: "flac",
+    extensions: ["flac"],
+    mime: "audio/flac",
+    decodable: true,
+    encodable: true,
+    lossy: false,
+  },
+
+  // ── Video ──────────────────────────────────────────────────────────────
+  mp4: {
+    id: "mp4",
+    label: "MP4",
+    kind: "video",
+    ext: "mp4",
+    extensions: ["mp4", "m4v"],
+    mime: "video/mp4",
+    decodable: true,
+    encodable: true,
+    lossy: true,
+  },
+  mov: {
+    // The other half of the iPhone problem: HEIC for stills, MOV for video.
+    id: "mov",
+    label: "MOV",
+    kind: "video",
+    ext: "mov",
+    extensions: ["mov", "qt"],
+    mime: "video/quicktime",
+    decodable: true,
+    encodable: true,
+    lossy: true,
+  },
+  webm: {
+    id: "webm",
+    label: "WebM",
+    kind: "video",
+    ext: "webm",
+    extensions: ["webm"],
+    mime: "video/webm",
+    decodable: true,
+    encodable: true,
+    lossy: true,
+  },
+  mkv: {
+    id: "mkv",
+    label: "MKV",
+    kind: "video",
+    ext: "mkv",
+    extensions: ["mkv"],
+    mime: "video/x-matroska",
+    decodable: true,
+    encodable: true,
+    lossy: true,
+  },
+  avi: {
+    // Read-only. AVI is a container people need to escape, never one they ask
+    // to be given, and writing it well means writing it badly.
+    id: "avi",
+    label: "AVI",
+    kind: "video",
+    ext: "avi",
+    extensions: ["avi"],
+    mime: "video/x-msvideo",
+    decodable: true,
+    encodable: false,
+    lossy: true,
+  },
 };
 
 const EXT_INDEX: ReadonlyMap<string, FormatId> = new Map(
@@ -199,9 +360,42 @@ export function detectFormat(file: { name: string; type?: string }): FormatId | 
   return undefined;
 }
 
-/** Formats we can produce, for the target dropdown. */
+/** Formats we can produce at all. */
 export function encodableFormats(): FormatSpec[] {
   return Object.values(FORMATS).filter((f) => f.encodable);
+}
+
+/**
+ * The targets actually reachable from a given source — what the dropdown shows.
+ *
+ * Listing every encodable format regardless of input offers "PNG" for an MP3
+ * and "MP4" for a JPEG. Picking one gets a polite refusal, but the person has
+ * already decided the tool is broken by then. An option that cannot work should
+ * not be on screen.
+ *
+ * Deliberately kept here rather than derived from the engines: this is a cheap
+ * synchronous call made during render, and the engine list needs a capability
+ * probe. The broker remains the authority — this only decides what to offer.
+ */
+export function targetsFor(source: FormatId): FormatSpec[] {
+  const kind = FORMATS[source].kind;
+  return Object.values(FORMATS).filter((f) => {
+    if (!f.encodable) return false;
+    switch (kind) {
+      case "image":
+        // Images become other images, or get bound into a PDF.
+        return f.kind === "image" || f.id === "pdf";
+      case "document":
+        // A PDF renders to images, or passes through.
+        return f.kind === "image" || f.id === "pdf";
+      case "audio":
+        return f.kind === "audio";
+      case "video":
+        // Video to video, plus audio extraction — "get the MP3 out of this" is
+        // one of the most-wanted conversions there is.
+        return f.kind === "video" || f.kind === "audio";
+    }
+  });
 }
 
 /**
@@ -223,7 +417,42 @@ const DEFAULT_TARGETS: Partial<Record<FormatId, FormatId>> = {
   webp: "jpeg", // and the reverse: "make this open in anything"
   avif: "jpeg",
   pdf: "png",
+
+  // Audio: everything wants to become MP3, because "will this play on the
+  // thing I'm putting it on" beats fidelity for almost everyone who arrives
+  // here. FLAC is the exception — someone holding a FLAC chose it on purpose,
+  // and defaulting them to a lossy format would throw away what they came for.
+  wav: "mp3",
+  m4a: "mp3",
+  aac: "mp3",
+  ogg: "mp3",
+  opus: "mp3",
+  flac: "wav",
+  mp3: "wav",
+
+  // Video: MP4 is the format that plays everywhere, and that is the whole ask.
+  mov: "mp4",
+  mkv: "mp4",
+  avi: "mp4",
+  webm: "mp4",
+  mp4: "webm", // and the reverse, for people shrinking things for the web
 };
+
+/** Formats we can produce, grouped for a target dropdown that isn't 20 items long. */
+export function encodableByKind(): Record<Kind, FormatSpec[]> {
+  const out: Record<Kind, FormatSpec[]> = { image: [], document: [], audio: [], video: [] };
+  for (const f of Object.values(FORMATS)) if (f.encodable) out[f.kind].push(f);
+  return out;
+}
+
+/**
+ * Pulling the audio out of a video is a conversion people ask for constantly
+ * ("get the mp3 out of this"), and it is the one cross-kind pair that is not a
+ * mistake — so it gets named rather than inferred.
+ */
+export function isAudioExtraction(source: FormatId, target: FormatId): boolean {
+  return FORMATS[source].kind === "video" && FORMATS[target].kind === "audio";
+}
 
 export function defaultTargetFor(source: FormatId): FormatId {
   const preferred = DEFAULT_TARGETS[source];

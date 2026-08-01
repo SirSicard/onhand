@@ -226,3 +226,73 @@ us nothing and lies to no one.
 - 2026-08-01: Browser-mode suite added. **264 tests green across Chromium, Firefox and
   WebKit** — full matrix, quality monotonicity, PDF both ways, 50-file batch (worst
   main-thread block < 400ms), and batch resilience. Wired into CI.
+
+## P2 — Audio + video — DONE 2026-08-01
+
+**Deviation from plan, and why.** The plan specified web-demuxer + mp4-muxer +
+webm-muxer + a hand-written WebCodecs pipeline. Shipped **mediabunny** instead:
+one pure-TypeScript library, zero runtime dependencies, no extra wasm, and it
+covers demux, decode, encode and mux for every container we care about. It also
+exposes `canEncodeVideo`/`canEncodeAudio`, which is what makes the routing
+honest — see below. Four packages and a pipeline became one dependency.
+
+**Two engines, and the user never sees either.**
+- `webcodecs` (cost 2) — mediabunny over the browser's own codecs. Fast, no
+  download, real progress.
+- `ffmpeg` (cost 10) — ffmpeg.wasm. Correct for everything, first choice for
+  nothing.
+
+Routing is **declared, not tabulated**: the WebCodecs engine names the codec it
+wants for a container and asks the browser at runtime whether it can encode it.
+If not, it throws a `NotMyJobError` the broker treats as a fall-through and
+ffmpeg picks it up. No hardcoded browser table to go stale — measured
+`mov -> mp4`: **Chromium 106ms and WebKit 157ms via WebCodecs, Firefox 3708ms
+via ffmpeg** (no AAC encoder), all three producing correct output.
+
+### What went wrong, in order
+
+- **`ff.load()` hangs forever rather than rejecting.** Vite's dep optimizer
+  rewrote @ffmpeg/ffmpeg's internal worker URL to a file it never emitted, so
+  load() sat waiting for a ready message from a worker that was never
+  constructed. No error, no console output, nothing — 10 minutes of a test run
+  producing zero bytes of output. Fixed by excluding the package, and
+  independently by giving `load()` a 120s deadline, because a dependency that
+  can hang forever will eventually hang in production too.
+- **The UMD core was the wrong build.** @ffmpeg/ffmpeg always constructs its
+  worker with `type: "module"`, in both code branches — there is no classic
+  path. `importScripts` doesn't exist there, so it always falls back to
+  `await import(coreURL)`, which needs ESM. The UMD build fails with "Failed to
+  fetch dynamically imported module", which reads like a missing file.
+- **Then the ESM core failed too**, because a dev server treats a real path as
+  a module to transform: Vite appended `?import` and choked on 111 KB of
+  emscripten output. Fixed with `toBlobURL` — a `blob:` URL is opaque to the
+  bundler, so dev and production run the same path.
+- **The core is served from our own origin, never a CDN.** COEP would block it,
+  and a CDN fetch leaks the user's IP and a referrer naming the tool. 32 MB is
+  copied to `public/ffmpeg/` on prebuild by `scripts/sync-ffmpeg-core.mjs`.
+- **The rotation fixture tested nothing.** `-metadata:s:v:0 rotate=90` is
+  deprecated and modern ffmpeg ignores it silently — exit 0, file written, no
+  display matrix. The test failed and the *engine was innocent*; mediabunny had
+  been handling rotation correctly all along. Fixed with `-display_rotation` on
+  the input, and the generator now verifies with ffprobe rather than trusting
+  an exit code.
+- **ffmpeg exits 0 having written a 0-byte file.** The native Vorbis encoder is
+  stereo-only and fails *after* creating the output. A 0-byte fixture passes a
+  presence check, so the generator now checks size and deletes empties.
+- **Two servers on one port.** A stale `astro dev` was bound to [::1]:4322 and
+  won `localhost` resolution, so the first round of "production verification"
+  was reading a dev server serving the repo root. Verified on a clean port
+  afterwards; `scripts/serve-dist.mjs` now serves `dist/` with the real
+  COOP/COEP headers, which `astro preview` does not do.
+
+### Found by driving the built UI, not by reading code
+- The target dropdown offered **JPEG, PNG and PDF for an audio file**. Now
+  `targetsFor(source)` — an option that cannot work is not shown.
+- **Smallest/Balanced/Best did nothing on audio or video.** The presets only
+  carried image quality; they now carry an audio bitrate too.
+- Footer still claimed "Images now. Audio and video next."
+
+**AC-P2 status:** mov→mp4 uses WebCodecs in Chromium/WebKit and falls back
+cleanly in Firefox, asserted by engine telemetry. mkv→mp4, avi→mp4, video→mp3
+and the full audio matrix pass in all three browsers. Memory guardrail refuses
+oversized input in under 500ms rather than crashing the tab mid-encode.

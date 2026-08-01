@@ -26,3 +26,11 @@ pnpm-debug.log*
 coverage/
 test-results/
 playwright-report/
+
+# 32 MB ffmpeg core, copied from node_modules by scripts/sync-ffmpeg-core.mjs
+public/ffmpeg/
+
+# vitest browser-mode writes a screenshot when a test FAILS. They are debris
+# from a red run, not visual baselines — several were committed in P1 recording
+# failures that have since been fixed.
+src/**/__screenshots__/

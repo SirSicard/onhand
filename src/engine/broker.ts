@@ -2,6 +2,9 @@ import { probeCapabilities } from "./capabilities";
 import { FORMATS, renameTo, type FormatId } from "./formats";
 import { imageEngine } from "./engines/imageEngine";
 import { pdfEngine } from "./engines/pdfEngine";
+import { mediaEngine } from "./engines/mediaEngine";
+import { ffmpegEngine } from "./engines/ffmpegEngine";
+import { assertWithinMemoryBudget } from "./memory";
 import {
   ConversionError,
   type ConvertOptions,
@@ -19,9 +22,10 @@ import {
  * next capable thing. That is prime directive 3.
  */
 
-const ENGINES: Engine[] = [imageEngine, pdfEngine];
+// Order here is irrelevant — enginesFor sorts by cost, so the cheap path always
+// gets first refusal and ffmpeg is the last resort.
+const ENGINES: Engine[] = [imageEngine, pdfEngine, mediaEngine, ffmpegEngine];
 
-/** Registration point for the ffmpeg and WebCodecs engines in P2. */
 export function registerEngine(engine: Engine): void {
   if (!ENGINES.some((e) => e.id === engine.id)) ENGINES.push(engine);
 }
@@ -59,6 +63,10 @@ export async function convert(
       { suggestion: alternatives ? `You can convert this to: ${alternatives}.` : undefined },
     );
   }
+
+  // Refuse before the work starts rather than after five minutes of encoding
+  // ends in a tab crash that loses the whole queue.
+  assertWithinMemoryBudget(file.size, source, target);
 
   const started = performance.now();
   let lastError: unknown;
