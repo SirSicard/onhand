@@ -58,23 +58,35 @@ async function decodeNatively(buffer: ArrayBuffer, mime: string): Promise<ImageD
 }
 
 async function decodeHeic(buffer: ArrayBuffer): Promise<ImageData> {
-  // libheif is ~1.5 MB of wasm; only people converting iPhone photos pay for it.
-  const { default: libheif } = await import("libheif-js/wasm-bundle");
+  // Chromium and Firefox cannot decode HEIC at all (Safari can), so libheif is
+  // the only path for the format most people arrive here to escape.
+  //
+  // Import the .mjs build explicitly. The package's `main` and its `wasm-bundle`
+  // entry are CommonJS/UMD, which blow up in an ES-module worker with the
+  // magnificently unhelpful `ReferenceError: module is not defined`.
+  // libheif-bundle.mjs embeds its own wasm, so there is no separate binary to
+  // locate — worth the ~2 MB given it is loaded only for HEIC jobs.
+  const factory = (await import("libheif-js/libheif-wasm/libheif-bundle.mjs")).default;
+  const libheif = await factory();
+
   const decoder = new libheif.HeifDecoder();
   const images = decoder.decode(new Uint8Array(buffer));
-  const image = images[0];
+  const image = images?.[0];
   if (!image) {
     throw new Error("HEIC container held no image");
   }
+
   const width = image.get_width();
   const height = image.get_height();
   const out = new ImageData(width, height);
+
   await new Promise<void>((resolve, reject) => {
     image.display({ data: out.data, width, height }, (result: unknown) => {
       if (result) resolve();
       else reject(new Error("HEIC decode returned no data"));
     });
   });
+
   return out;
 }
 
@@ -93,6 +105,26 @@ async function loadResvg() {
     return mod;
   })();
   return resvgReady;
+}
+
+async function decodeTiff(buffer: ArrayBuffer): Promise<ImageData> {
+  // No browser decodes TIFF, and TIFF is less a format than a container of
+  // wildly varying contents — big-endian, 14 bits per sample, tiled, LZW,
+  // CMYK. UTIF handles the realistic spread in ~30 KB of plain JS, which beats
+  // shipping a wasm codec for a format most people convert *out of*, once.
+  const UTIF = (await import("utif")).default;
+  const ifds = UTIF.decode(buffer);
+  const page = ifds[0];
+  if (!page) throw new Error("TIFF held no image");
+
+  UTIF.decodeImage(buffer, page, ifds);
+  const rgba = UTIF.toRGBA8(page); // normalises bit depth and colour model for us
+
+  const width = page.width;
+  const height = page.height;
+  if (!width || !height) throw new Error("TIFF reported no dimensions");
+
+  return new ImageData(new Uint8ClampedArray(rgba), width, height);
 }
 
 async function decodeSvg(buffer: ArrayBuffer, maxDimension?: number): Promise<ImageData> {
@@ -121,6 +153,7 @@ async function decode(
   maxDimension?: number,
 ): Promise<ImageData> {
   if (source === "heic") return decodeHeic(buffer);
+  if (source === "tiff") return decodeTiff(buffer);
   if (source === "svg") return decodeSvg(buffer, maxDimension);
 
   // Prefer the browser's own decoder where it exists — no wasm download at all.

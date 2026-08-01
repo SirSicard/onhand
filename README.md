@@ -5,7 +5,8 @@
 Images, audio and video converted entirely inside your browser tab, on your own machine.
 No accounts, no ads, no email gates, no upload. Free forever, because it costs nothing to run.
 
-> **Status: groundwork.** P0 (rails) is done. The converter itself lands in P1–P2.
+> **Status: images working.** Drop a HEIC, JPEG, PNG, WebP, AVIF, TIFF, BMP, GIF,
+> ICO or SVG and get JPEG, PNG, WebP or AVIF back. Audio and video land in P2.
 > See [`BATTLEPLAN.md`](./BATTLEPLAN.md) for the build order.
 
 ---
@@ -40,7 +41,7 @@ means that asterisk no longer has to exist.
 
 | | |
 |---|---|
-| **Images** | jpg png webp avif heic gif bmp tiff ico svg ⇄ pdf |
+| **Images** | jpg png webp avif **heic** gif bmp tiff ico svg → jpg png webp avif |
 | **Audio** | mp3 wav m4a aac ogg opus flac aiff wma |
 | **Video** | mp4 mov webm mkv avi gif, plus extract-audio |
 

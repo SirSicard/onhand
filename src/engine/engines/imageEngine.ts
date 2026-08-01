@@ -40,6 +40,7 @@ const IMAGE_SOURCES: ReadonlySet<FormatId> = new Set([
   "bmp",
   "ico",
   "svg",
+  "tiff",
 ]);
 
 const IMAGE_TARGETS: ReadonlySet<FormatId> = new Set(["jpeg", "png", "webp", "avif"]);

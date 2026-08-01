@@ -130,7 +130,7 @@ export const FORMATS: Record<FormatId, FormatSpec> = {
     ext: "tiff",
     extensions: ["tif", "tiff"],
     mime: "image/tiff",
-    decodable: false, // browsers won't decode TIFF natively; needs a codec in P1.1
+    decodable: true, // via UTIF — no browser decodes TIFF natively
     encodable: false,
     lossy: false,
   },

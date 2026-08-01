@@ -192,3 +192,16 @@ us nothing and lies to no one.
   product makes. `PerformanceResourceTiming` exposes no request-body size, so
   `uploadMonitor.ts` wraps fetch/XHR/sendBeacon and measures request bodies. Locked
   by 6 tests incl. "does not count downloads".
+- 2026-08-01: **HEIC needed the .mjs build.** `libheif-js` root and `wasm-bundle`
+  entries are CommonJS/UMD → `ReferenceError: module is not defined` in an ES-module
+  worker. Use `libheif-js/libheif-wasm/libheif-bundle.mjs`, which default-exports an
+  async factory and embeds its own wasm. Verified against a real Apple-encoded HEIC.
+- 2026-08-01: TIFF now decodes via `utif` (pure JS, ~30 KB). NOTE: utif must NOT go in
+  `optimizeDeps.exclude` — it has no wasm, and excluding it skips Vite's CommonJS
+  interop so `UTIF.default` is undefined. Only wasm packages belong in that list.
+- 2026-08-01: Test corpus built (`fixtures/generate.py`, 18 files, 2.2 MB) from Apple's
+  `sips` + PIL. Real encoders, no downloads, MIT-clean, reproducible. Full matrix
+  **64/64** (16 sources × 4 targets) with dimensions asserted. Only 3 small samples
+  (64 KB) ship to production; the corpus stays in fixtures/.
+- 2026-08-01: EXIF orientation is honoured — `rotated-exif.jpg` (orientation 6, 640x480)
+  correctly outputs 480x640. createImageBitmap applies it; do not "fix" this.
