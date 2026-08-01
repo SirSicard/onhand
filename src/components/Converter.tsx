@@ -8,6 +8,7 @@ import {
 } from "@/engine/formats";
 import { ConversionError, newJobId, type Job } from "@/engine/types";
 import { installUploadMonitor, getSentBytes, onSentBytesChange } from "@/engine/uploadMonitor";
+import { onEngineLoad, FFMPEG_DOWNLOAD_MB } from "@/engine/engineLoad";
 
 // `quality` drives image encoders; `audioBitrateKbps` drives the audio ones.
 // Without the second field "Smallest" was a no-op on every audio and video job
@@ -30,7 +31,19 @@ export default function Converter() {
   const [preset, setPreset] = useState<PresetKey>("balanced");
   const [dragging, setDragging] = useState(false);
   const [uploadedBytes, setUploadedBytes] = useState(0);
+  const [engineLoad, setEngineLoad] = useState<{ loading: boolean; progress: number | null }>({
+    loading: false,
+    progress: null,
+  });
   const inputRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * The ffmpeg engine is a 32 MB download, fetched the first time a job needs
+   * it. Without this the page just sits there looking broken for however long
+   * that takes on a bad connection. Saying what is happening, how big it is,
+   * and that it only happens once turns a hang into a wait.
+   */
+  useEffect(() => onEngineLoad(setEngineLoad), []);
 
   /**
    * The trust surface. Counts bytes this page SENDS — see uploadMonitor for why
@@ -206,6 +219,30 @@ export default function Converter() {
               ↑ {uploadedBytes === 0 ? "0 bytes" : humanSize(uploadedBytes)} uploaded
             </span>
           </div>
+
+          {engineLoad.loading && (
+            <div
+              className="mt-4 rounded-lg border border-glass-200 px-3 py-2 text-sm text-glass-600 dark:border-glass-800 dark:text-glass-400"
+              role="status"
+              aria-live="polite"
+            >
+              Getting the engine for this format —{" "}
+              <span className="font-mono">
+                {engineLoad.progress === null
+                  ? `${FFMPEG_DOWNLOAD_MB} MB`
+                  : `${Math.round(engineLoad.progress * FFMPEG_DOWNLOAD_MB)} of ${FFMPEG_DOWNLOAD_MB} MB`}
+              </span>
+              , once. It stays cached after this.
+              {engineLoad.progress !== null && (
+                <div className="mt-2 h-1 w-full overflow-hidden rounded bg-glass-200 dark:bg-glass-800">
+                  <div
+                    className="h-full bg-copper-500 transition-[width] duration-200"
+                    style={{ width: `${engineLoad.progress * 100}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
 
           <ul className="mt-4 divide-y divide-glass-200 dark:divide-glass-800">
             {jobs.map((job) => (

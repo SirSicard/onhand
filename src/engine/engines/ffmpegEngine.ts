@@ -1,5 +1,6 @@
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { toBlobURL } from "@ffmpeg/util";
+import { announceEngineLoad } from "../engineLoad";
 import { FORMATS, isAudioExtraction, type FormatId } from "../formats";
 import { ConversionError, type ConvertOptions, type Engine, type ProgressUpdate } from "../types";
 
@@ -36,20 +37,21 @@ let blobUrls: Promise<{ coreURL: string; wasmURL: string }> | null = null;
 
 function coreBlobUrls() {
   blobUrls ??= (async () => {
-    const [coreURL, wasmURL] = await Promise.all([
-      toBlobURL(CORE_URL, "text/javascript"),
-      toBlobURL(WASM_URL, "application/wasm"),
-    ]);
+    // The .js is small; only the 32 MB wasm is worth reporting on. Its progress
+    // is real — read from Content-Length — so the number shown is a measurement
+    // rather than an animation, which is the whole point of showing one.
+    const coreURL = await toBlobURL(CORE_URL, "text/javascript");
+    const wasmURL = await toBlobURL(WASM_URL, "application/wasm", true, ({ received, total }) => {
+      announce(true, total > 0 ? Math.min(received / total, 1) : null);
+    });
     return { coreURL, wasmURL };
   })().catch((err) => {
     blobUrls = null; // a failed fetch must not be cached as the answer
+    announce(false, null);
     throw err;
   });
   return blobUrls;
 }
-
-/** Roughly what the user is about to download, for the one-time notice. */
-export const FFMPEG_DOWNLOAD_MB = 32;
 
 /**
  * Generous enough for 32 MB over a slow connection, short enough that a
@@ -70,17 +72,8 @@ function withDeadline<T>(promise: Promise<T>, ms: number, what: string): Promise
 let instance: FFmpeg | null = null;
 let loading: Promise<FFmpeg> | null = null;
 
-/** Fires while the engine itself is downloading, so the UI can say so once. */
-export type EngineLoadListener = (state: { loading: boolean; progress: number | null }) => void;
-const loadListeners = new Set<EngineLoadListener>();
-
-export function onEngineLoad(fn: EngineLoadListener): () => void {
-  loadListeners.add(fn);
-  return () => loadListeners.delete(fn);
-}
-
 function announce(loading: boolean, progress: number | null) {
-  for (const fn of loadListeners) fn({ loading, progress });
+  announceEngineLoad({ loading, progress });
 }
 
 export function isFfmpegLoaded(): boolean {
@@ -94,7 +87,9 @@ async function load(): Promise<FFmpeg> {
 
   loading = (async () => {
     const ff = new FFmpeg();
-    announce(true, 0);
+    // null, not 0: at this instant we genuinely don't know how much is left,
+    // and a bar that sits at 0% is a claim we can't back.
+    announce(true, null);
 
     // The browser cache is what makes the 32 MB a genuinely one-time cost.
     // @ffmpeg/ffmpeg fetches these URLs itself, so a normal HTTP cache entry is

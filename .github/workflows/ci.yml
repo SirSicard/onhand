@@ -58,6 +58,26 @@ jobs:
             || { echo "::error::COEP header missing from dist/_headers"; exit 1; }
           echo "cross-origin isolation headers present"
 
+      # The ffmpeg core is NOT committed — it is 32 MB, copied out of
+      # node_modules by the prebuild step. If a build command ever bypasses
+      # that hook (running `astro build` directly instead of `pnpm build`), the
+      # site deploys looking perfectly healthy and every audio job fails on a
+      # 404 for a file nobody notices is missing. Assert it landed.
+      - name: Assert the ffmpeg core shipped
+        run: |
+          test -f dist/ffmpeg/ffmpeg-core.js \
+            || { echo "::error::dist/ffmpeg/ffmpeg-core.js missing — did prebuild run?"; exit 1; }
+          test -f dist/ffmpeg/ffmpeg-core.wasm \
+            || { echo "::error::dist/ffmpeg/ffmpeg-core.wasm missing — did prebuild run?"; exit 1; }
+          size=$(wc -c < dist/ffmpeg/ffmpeg-core.wasm)
+          test "$size" -gt 20000000 \
+            || { echo "::error::ffmpeg-core.wasm is only $size bytes — truncated copy"; exit 1; }
+          # The ESM build is the only one that works: @ffmpeg/ffmpeg always
+          # creates a module worker, so it always loads the core with import().
+          grep -q "export default" dist/ffmpeg/ffmpeg-core.js \
+            || { echo "::error::ffmpeg-core.js is not the ESM build — import() will fail"; exit 1; }
+          echo "ffmpeg core present: $size bytes, ESM"
+
       # Prime directive 1: file bytes never leave the device. The strongest cheap
       # guard is that the built output contains no outbound endpoints at all.
       - name: Assert no external network endpoints in build output
