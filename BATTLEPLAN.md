@@ -457,3 +457,26 @@ simulating offline — page rendered from cache, conversion completed 25.7 KB �
 22.2 KB, counter read zero. Lighthouse ≥ 95 on all four categories. (The PWA
 category no longer exists in Lighthouse 12; offline was verified directly
 instead, which is a stronger test than the audit was.)
+
+### P4 errata — found on production
+
+- **The first git-triggered Cloudflare build deployed an EMPTY site.** Every
+  path 404'd, including `/`. Invisible from outside: the deployment lists as
+  Production with a working-looking URL, and the previous manual deploy stays
+  live, so the site appears healthy and silently stops receiving changes. Fixed
+  by `wrangler.toml` pinning `pages_build_output_dir`. **The build command must
+  be `pnpm build`** — `astro build` skips the hooks that gzip the ffmpeg core
+  and generate the service worker.
+- **Mixing manual `wrangler pages deploy` with a git-connected project is
+  confusing to diagnose**: the alias serves whichever succeeded last, so a
+  broken git build hides behind a good manual one. Manual deploys are now a
+  break-glass tool, not a habit.
+- **The offline badge demanded a PNG decoder that is never fetched.** PNG, JPEG,
+  WebP, GIF, BMP and ICO decode through `createImageBitmap` — no wasm at all —
+  but `NATIVE_DECODABLE` lived only in the worker while the badge kept its own
+  guess. It reported "not available offline" for pairs that work fine, which
+  undersells the product exactly where it is making a promise. One table now,
+  in `formats.ts`, read by both.
+- CI now asserts the service worker shipped, is the generated one, and
+  **precaches no codecs** — a shell that quietly grew to include a 10 MB wasm
+  would pass every other check.

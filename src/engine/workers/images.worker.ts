@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 import * as Comlink from "comlink";
-import type { FormatId } from "../formats";
+import { NATIVE_DECODABLE, type FormatId } from "../formats";
 import type { ConvertOptions } from "../types";
 
 /**
@@ -35,20 +35,6 @@ const JSQUASH_DECODERS: Partial<Record<FormatId, () => Promise<JsquashDecode>>> 
   webp: async () => (await import("@jsquash/webp")).decode,
   avif: async () => (await import("@jsquash/avif")).decode as JsquashDecode,
 };
-
-/**
- * Formats the browser itself can decode via ImageDecoder/createImageBitmap.
- * Cheaper and faster than shipping a wasm codec when it works — and for GIF,
- * BMP and ICO there is no good small wasm decoder anyway.
- */
-const NATIVE_DECODABLE: ReadonlySet<FormatId> = new Set([
-  "gif",
-  "bmp",
-  "ico",
-  "png",
-  "jpeg",
-  "webp",
-]);
 
 async function decodeNatively(buffer: ArrayBuffer, mime: string): Promise<ImageData> {
   const blob = new Blob([buffer], { type: mime });

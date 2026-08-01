@@ -1,6 +1,15 @@
 import { describe, it, expect } from "vitest";
 import { assetsForPair } from "./offline";
-import { FORMATS, targetsFor } from "./formats";
+import { FORMATS, NATIVE_DECODABLE, targetsFor } from "./formats";
+
+/** Fragments contributed by the ENCODE side, so decode assertions can exclude them. */
+const ENCODE_FRAGMENTS = new Set([
+  "mozjpeg_enc",
+  "squoosh_png_bg",
+  "squoosh_oxipng",
+  "webp_enc",
+  "avif_enc",
+]);
 
 /**
  * The offline badge makes a promise. These guard the two ways it could lie.
@@ -53,5 +62,26 @@ describe("assetsForPair", () => {
         }
       }
     }
+  });
+});
+
+describe("the mapping matches what the engine really loads", () => {
+  it("asks for nothing to decode a format the browser decodes itself", () => {
+    // PNG, JPEG, WebP, GIF, BMP and ICO go through createImageBitmap — no wasm
+    // is ever fetched. Demanding one made the badge report "not available
+    // offline" for pairs that work fine, which undersells the product in the
+    // one place it is trying to make a promise.
+    for (const source of NATIVE_DECODABLE) {
+      const needed = assetsForPair(source, "png");
+      const decodeSide = needed.filter((f) => !ENCODE_FRAGMENTS.has(f));
+      expect(decodeSide, `${source} should need nothing to decode`).toEqual([]);
+    }
+  });
+
+  it("still asks for the decoders that genuinely exist", () => {
+    // The inverse: these are NOT natively decodable and do need wasm.
+    expect(assetsForPair("heic", "jpeg")).toContain("libheif");
+    expect(assetsForPair("avif", "jpeg")).toContain("avif_dec");
+    expect(assetsForPair("svg", "png")).toContain("index_bg");
   });
 });

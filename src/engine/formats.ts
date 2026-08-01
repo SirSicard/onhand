@@ -360,6 +360,24 @@ export function detectFormat(file: { name: string; type?: string }): FormatId | 
   return undefined;
 }
 
+/**
+ * Formats the browser decodes itself, via ImageDecoder or createImageBitmap.
+ *
+ * Lives here rather than in the worker because two things need it: the worker,
+ * to decide whether to load a wasm decoder at all, and the offline check, to
+ * decide whether a pair needs anything cached. Kept as one table because when
+ * it was two, the offline badge demanded a PNG decoder that is never fetched
+ * and reported "not available offline" for a pair that works fine.
+ */
+export const NATIVE_DECODABLE: ReadonlySet<FormatId> = new Set([
+  "gif",
+  "bmp",
+  "ico",
+  "png",
+  "jpeg",
+  "webp",
+]);
+
 /** Formats we can produce at all. */
 export function encodableFormats(): FormatSpec[] {
   return Object.values(FORMATS).filter((f) => f.encodable);

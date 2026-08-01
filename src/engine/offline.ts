@@ -1,4 +1,4 @@
-import { FORMATS, type FormatId } from "./formats";
+import { FORMATS, NATIVE_DECODABLE, type FormatId } from "./formats";
 
 /**
  * Whether a given conversion would still work with the network off.
@@ -29,17 +29,13 @@ import { FORMATS, type FormatId } from "./formats";
 const DECODE_ASSETS: Partial<Record<FormatId, string[]>> = {
   heic: ["libheif"],
   avif: ["avif_dec"],
-  webp: ["webp_dec"],
-  jpeg: ["mozjpeg_dec"],
-  png: ["squoosh_png_bg"],
-  // resvg compiles to a wasm the bundler names `index_bg`, which is
-  // unrecognisable but is what is actually on disk.
+  // resvg compiles to a wasm the bundler names `index_bg` — unrecognisable,
+  // but it is what is actually on disk.
   svg: ["index_bg"],
-  tiff: [], // UTIF is plain JS, cached with the shell on first use
+  tiff: [], // UTIF is plain JS, cached with the shell
   pdf: [], // pdf.js is JS; so is its worker
-  gif: [], // decoded by the browser itself
-  bmp: [],
-  ico: [],
+  // Everything in NATIVE_DECODABLE is deliberately absent: the browser decodes
+  // those itself and no wasm is ever fetched, so they need nothing cached.
 };
 
 const ENCODE_ASSETS: Partial<Record<FormatId, string[]>> = {
@@ -61,7 +57,8 @@ const FFMPEG_ASSETS = ["/ffmpeg/ffmpeg-core.js", "/ffmpeg/ffmpeg-core.wasm.gz"];
 
 /** Every asset substring a pair depends on. */
 export function assetsForPair(source: FormatId, target: FormatId): string[] {
-  const needed = [...(DECODE_ASSETS[source] ?? []), ...(ENCODE_ASSETS[target] ?? [])];
+  const decode = NATIVE_DECODABLE.has(source) ? [] : (DECODE_ASSETS[source] ?? []);
+  const needed = [...decode, ...(ENCODE_ASSETS[target] ?? [])];
 
   const kind = FORMATS[source].kind;
   if (kind === "audio" || kind === "video") {
