@@ -58,6 +58,11 @@ const EXPECTED: Record<string, { format: string; dim: string }> = {
   "clip.webm": { format: "webm", dim: "640x360" },
   "clip.mkv": { format: "mkv", dim: "640x360" },
   "clip.avi": { format: "avi", dim: "640x360" },
+  // Stereo, unlike clip.avi, and that is its entire reason for existing: the
+  // bundled ffmpeg's libopus faults on any stereo input, and AVI is the one
+  // container no other engine can read — so this is the file that reaches the
+  // broken encoder with nothing else able to take the job.
+  "stereo.avi": { format: "avi", dim: "320x240" },
   "silent.mp4": { format: "mp4", dim: "640x360" },
   // Odd dimensions: H.264 cannot encode them, so anything that doesn't round
   // to even fails here rather than on someone's cropped phone video.

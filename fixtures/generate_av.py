@@ -123,6 +123,24 @@ def main() -> int:
         [*AV_IN, "-c:v", "mpeg4", "-vtag", "xvid", "-b:v", "300k", "-c:a", "libmp3lame", "-b:a", "128k"],
         "clip.avi",
     )
+    # A STEREO AVI, and it exists for one specific defect.
+    #
+    # clip.avi above is mono, which is why it converts to Opus without
+    # complaint. The bundled ffmpeg (5.1.4) has a libopus that faults on any
+    # stereo input, and AVI is the container mediabunny cannot demux — so a
+    # stereo AVI is the one realistic file that reaches the broken encoder with
+    # no other engine able to take the job. The broker answers it by routing
+    # through WAV; without this fixture that path is untested.
+    results["stereo.avi"] = ff(
+        ["-f", "lavfi", "-i", "testsrc2=size=320x240:rate=24:duration=2",
+         "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
+         "-f", "lavfi", "-i", "sine=frequency=660:duration=2",
+         "-filter_complex", "[1:a][2:a]join=inputs=2:channel_layout=stereo[a]",
+         "-map", "0:v", "-map", "[a]",
+         "-c:v", "mpeg4", "-vtag", "xvid", "-b:v", "300k",
+         "-c:a", "libmp3lame", "-b:a", "128k", "-ac", "2"],
+        "stereo.avi",
+    )
     # Video with no audio track at all — a muxer that assumes one track of each
     # kind throws here rather than on a user's file.
     results["silent.mp4"] = ff(

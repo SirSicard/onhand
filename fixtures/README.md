@@ -98,6 +98,7 @@ else.
 | `clip.webm` | 96,495 | VP9 + Opus |
 | `clip.mkv` | 102,324 | Matroska |
 | `clip.avi` | 231,490 | MPEG-4 Part 2 + MP3. **WebCodecs has never heard of this** — proves the ffmpeg fallback fires |
+| `stereo.avi` | 199,754 | Same container, but **stereo** audio. ffmpeg 5.1.4's libopus faults on any stereo input, and AVI is the only source no other engine can read — so this is the one file that reaches the defect. The broker answers it by routing through WAV |
 | `silent.mp4` | 71,314 | **No audio track at all.** Anything assuming one track of each kind fails here rather than on a screen recording |
 | `portrait-odd.mp4` | 93,672 | **607×1079.** H.264 cannot encode odd dimensions; this is the shape a phone crop produces |
 | `rotated.mov` | 103,588 | **90° display matrix.** Correct output is 360×640; a naive conversion emits 640×360 lying on its side |
