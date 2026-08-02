@@ -177,7 +177,7 @@ skipping those hooks yields a site whose audio conversions 404 and which has no
 offline support, with no error to explain either.
 
 Conversion tests need a real browser, because mocking a wasm codec tests the
-mock. **576 browser tests run across Chromium, Firefox and WebKit**, plus 79 in
+mock. **576 browser tests run across Chromium, Firefox and WebKit**, plus 83 in
 node. The cross-browser matrix runs nightly rather than per-push: browser
 differences change with browser releases, not with our commits.
 

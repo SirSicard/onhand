@@ -401,27 +401,27 @@ describe("the quality preset on a video track", () => {
     //
     // Audio is held constant here precisely so it cannot mask the result — it
     // was what made the bug look fixed when it wasn't.
-    for (const [source, target] of [
-      ["mp4", "webm"],
-      ["mp4", "mkv"],
-    ] as const) {
-      const file = await fixture("clip.mp4");
-      const sizes: number[] = [];
-      for (const quality of [55, 80]) {
-        const r = await convert(file, source, target, { quality, audioBitrateKbps: 192 }, () => {});
-        sizes.push(r.blob.size);
-      }
-      const [smallest, balanced] = sizes as [number, number];
-
-      // Only the downward direction is asserted. Raising quality above the
-      // middle cannot always grow the file — a short synthetic clip is
-      // compressible enough that the encoder never spends the extra budget —
-      // and an assertion that demands it would be testing the fixture, not us.
-      expect(
-        smallest,
-        `${source}→${target}: Smallest produced ${smallest} vs Balanced ${balanced}`,
-      ).toBeLessThan(balanced * 0.9);
+    //
+    // ONE pair, not four. The argument list is where this actually broke, and
+    // ffmpegArgs.test.ts asserts that for every video target at no cost. This
+    // exists to prove real bytes differ, which one pair does. Four crashed the
+    // CI runner's tab: its Chromium has no AAC encoder, so every video job
+    // there goes through ffmpeg and the wasm heap does not shrink between them.
+    const file = await fixture("clip.mp4");
+    const sizes: number[] = [];
+    for (const quality of [55, 80]) {
+      const r = await convert(file, "mp4", "webm", { quality, audioBitrateKbps: 192 }, () => {});
+      sizes.push(r.blob.size);
     }
+    const [smallest, balanced] = sizes as [number, number];
+
+    // Only the downward direction is asserted. Raising quality above the
+    // middle cannot always grow the file — a short synthetic clip is
+    // compressible enough that the encoder never spends the extra budget —
+    // and an assertion that demands it would be testing the fixture, not us.
+    expect(smallest, `Smallest produced ${smallest} vs Balanced ${balanced}`).toBeLessThan(
+      balanced * 0.9,
+    );
   }, 300_000);
 });
 

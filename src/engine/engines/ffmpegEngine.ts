@@ -430,7 +430,14 @@ function gifProfile(quality: number | undefined) {
 
 const AV_KINDS = new Set(["audio", "video"]);
 
-function buildArgs(
+/**
+ * Exported for tests. Asserting on the ARGUMENT LIST rather than on encoded
+ * bytes is the cheaper and stricter check: it is deterministic, costs no wasm
+ * heap, and catches the exact failure this had — a quality control that reached
+ * the encoder as nothing at all. The browser tests still prove real files come
+ * out different sizes; this proves the instruction was issued.
+ */
+export function buildArgs(
   input: string,
   output: string,
   source: FormatId,
