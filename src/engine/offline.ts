@@ -66,7 +66,13 @@ const NEEDS_FFMPEG: ReadonlySet<FormatId> = new Set([
   "gif",
 ]);
 
-const FFMPEG_ASSETS = ["/ffmpeg/ffmpeg-core.js", "/ffmpeg/ffmpeg-core.wasm.gz"];
+/**
+ * Matched without a leading directory. There is one core today, but a threaded
+ * second one at /ffmpeg/mt/ was built and rejected (see ffmpegEngine), and if
+ * it ever returns, a hardcoded path here would silently report every ffmpeg
+ * pair as unavailable offline with 10 MB of engine sitting in the cache.
+ */
+const FFMPEG_ASSETS = ["ffmpeg-core.js", "ffmpeg-core.wasm.gz"];
 
 /** Every asset substring a pair depends on. */
 export function assetsForPair(source: FormatId, target: FormatId): string[] {

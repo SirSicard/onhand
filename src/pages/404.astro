@@ -1,0 +1,87 @@
+---
+import Base from "../layouts/Base.astro";
+import Converter from "../components/Converter";
+import { PAIRS, slugFor, titleFor } from "../lib/pairs";
+import { TOOLS } from "../lib/tools";
+
+/**
+ * The not-found page.
+ *
+ * Cloudflare Pages serves `404.html` for any unmatched route on a static site,
+ * so this replaces its generic one. With 148 pair pages the realistic way to
+ * land here is a guessed or mistyped slug — someone typing /jpg-to-heic/ or
+ * /mp4-to-avi/, both of which are conversions this deliberately does not do.
+ *
+ * So it does not just apologise. The converter is right here and works, and the
+ * links below are the two indexes that answer "then what CAN it do".
+ *
+ * Deliberately noindex: a 404 that search engines are welcome to index is how a
+ * site ends up with its error page ranking for real queries.
+ */
+const popular = PAIRS.slice(0, 6);
+---
+
+<Base
+  title="Page not found | Onhand"
+  description="That page doesn't exist. The converter is on this one anyway — drop a file and it works, nothing uploaded."
+>
+  <meta name="robots" content="noindex, follow" slot="head" />
+
+  <main class="mx-auto flex min-h-dvh max-w-3xl flex-col gap-10 px-6 py-16">
+    <header>
+      <nav class="mb-6 text-sm text-glass-600 dark:text-glass-400">
+        <a href="/" class="hover:text-copper-500">Onhand</a>
+      </nav>
+      <h1 class="text-3xl font-semibold tracking-tight sm:text-4xl">That page doesn't exist</h1>
+      <p class="mt-4 text-lg text-glass-600 dark:text-glass-400">
+        Most likely a conversion we don't do — <span class="font-mono text-base">jpg-to-heic</span>
+        and <span class="font-mono text-base">mp4-to-avi</span> are the usual guesses, and both are formats
+        people want <em>out</em> of rather than into.
+      </p>
+      <p class="mt-3 text-lg text-glass-600 dark:text-glass-400">
+        The converter is right here regardless. Drop a file and it will tell you what it can turn it
+        into.
+      </p>
+    </header>
+
+    <Converter client:load />
+
+    <section>
+      <h2 class="text-xl font-semibold">Or start from one of these</h2>
+      <ul class="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+        {
+          popular.map((pair) => (
+            <li>
+              <a
+                href={`/${slugFor(pair)}/`}
+                class="block rounded-xl border border-glass-200 bg-glass-100 px-3 py-2.5 text-center text-sm font-medium transition-colors duration-150 ease-[var(--ease-out-quart)] hover:border-copper-400 hover:text-copper-700 motion-reduce:transition-none dark:border-glass-800 dark:bg-glass-900 dark:hover:text-copper-400"
+              >
+                {titleFor(pair)}
+              </a>
+            </li>
+          ))
+        }
+      </ul>
+      <p class="mt-4 text-sm text-glass-600 dark:text-glass-400">
+        There are {PAIRS.length} conversions in the
+        <a
+          href="/formats/"
+          class="text-copper-700 underline underline-offset-2 dark:text-copper-400">format table</a
+        >, and {TOOLS.length} pages organised by
+        <a href="/tools/" class="text-copper-700 underline underline-offset-2 dark:text-copper-400"
+          >what you're trying to do</a
+        > if you'd rather not think in formats.
+      </p>
+    </section>
+
+    <footer class="text-center text-sm text-glass-600 dark:text-glass-400">
+      <p>
+        <a href="/" class="hover:text-copper-500">Home</a> ·
+        <a href="/tools/" class="hover:text-copper-500">Tools</a> ·
+        <a href="/formats/" class="hover:text-copper-500">All formats</a> ·
+        <a href="/why/" class="hover:text-copper-500">Why this exists</a>
+      </p>
+      <p class="mt-2">MIT licensed. No accounts, no telemetry, no ads.</p>
+    </footer>
+  </main>
+</Base>

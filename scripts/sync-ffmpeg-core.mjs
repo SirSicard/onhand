@@ -57,42 +57,46 @@ await mkdir(dest, { recursive: true });
  */
 const MAX_ASSET_BYTES = 25 * 1024 * 1024;
 
-for (const from of FILES) {
-  const name = basename(from);
-  const src = await stat(from);
+async function sync(files, outDir, label) {
+  for (const from of files) {
+    const name = basename(from);
+    const src = await stat(from);
 
-  if (name.endsWith(".wasm")) {
-    const to = join(dest, `${name}.gz`);
-    // Skip if the compressed copy is already newer than the source.
-    const existing = await stat(to).catch(() => null);
-    if (existing && existing.mtimeMs >= src.mtimeMs) {
-      console.log(`ffmpeg core: ${name}.gz up to date (${(existing.size / 1e6).toFixed(1)} MB)`);
+    if (name.endsWith(".wasm")) {
+      const to = join(outDir, `${name}.gz`);
+      // Skip if the compressed copy is already newer than the source.
+      const existing = await stat(to).catch(() => null);
+      if (existing && existing.mtimeMs >= src.mtimeMs) {
+        console.log(`${label}: ${name}.gz up to date (${(existing.size / 1e6).toFixed(1)} MB)`);
+        continue;
+      }
+
+      await pipeline(createReadStream(from), createGzip({ level: 9 }), createWriteStream(to));
+      const out = await stat(to);
+      if (out.size > MAX_ASSET_BYTES) {
+        // Fail the build rather than fail the deploy. wrangler rejects the whole
+        // upload, and finding out then means the reason is a line in a deploy log.
+        throw new Error(
+          `${name}.gz is ${(out.size / 1024 ** 2).toFixed(1)} MiB, over the 25 MiB ` +
+            `Cloudflare Pages limit. It cannot be deployed.`,
+        );
+      }
+      console.log(
+        `${label}: gzipped ${name} → ${(src.size / 1e6).toFixed(1)} MB into ` +
+          `${(out.size / 1e6).toFixed(1)} MB`,
+      );
       continue;
     }
 
-    await pipeline(createReadStream(from), createGzip({ level: 9 }), createWriteStream(to));
-    const out = await stat(to);
-    if (out.size > MAX_ASSET_BYTES) {
-      // Fail the build rather than fail the deploy. wrangler rejects the whole
-      // upload, and finding out then means the reason is a line in a deploy log.
-      throw new Error(
-        `${name}.gz is ${(out.size / 1024 ** 2).toFixed(1)} MiB, over the 25 MiB ` +
-          `Cloudflare Pages limit. It cannot be deployed.`,
-      );
+    const to = join(outDir, name);
+    const existing = await stat(to).catch(() => null);
+    if (existing && existing.size === src.size) {
+      console.log(`${label}: ${name} up to date (${(src.size / 1e6).toFixed(1)} MB)`);
+      continue;
     }
-    console.log(
-      `ffmpeg core: gzipped ${name} → ${(src.size / 1e6).toFixed(1)} MB into ` +
-        `${(out.size / 1e6).toFixed(1)} MB`,
-    );
-    continue;
+    await copyFile(from, to);
+    console.log(`${label}: copied ${name} (${(src.size / 1e6).toFixed(1)} MB)`);
   }
-
-  const to = join(dest, name);
-  const existing = await stat(to).catch(() => null);
-  if (existing && existing.size === src.size) {
-    console.log(`ffmpeg core: ${name} up to date (${(src.size / 1e6).toFixed(1)} MB)`);
-    continue;
-  }
-  await copyFile(from, to);
-  console.log(`ffmpeg core: copied ${name} (${(src.size / 1e6).toFixed(1)} MB)`);
 }
+
+await sync(FILES, dest, "ffmpeg core");

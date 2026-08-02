@@ -139,15 +139,18 @@ asterisk no longer has to exist.
 - **No Office documents** (docx/xlsx/pptx). LibreOffice-in-the-browser is a
   ~250 MB download and unstable as of 2026. When that changes, this line changes.
 - **The first ffmpeg conversion downloads 9.7 MB**, once, then cached. The page
-  says so before it starts, with real byte progress.
+  says so before it starts, with real byte progress. If it ever goes 45 seconds
+  without a word, the job is reported as failed rather than spinning forever —
+  which was a real gap: `load` had a deadline and `exec` had none.
 - **Firefox falls back to ffmpeg for anything needing AAC**, so `mov` → `mp4` is
   seconds there instead of milliseconds. Correct either way.
-- **Stereo Opus needs a browser with a WebCodecs Opus encoder** — which Chrome,
-  Firefox and Safari all have, so this affects almost nobody. The bundled
-  ffmpeg (5.1.4) has a defect where libopus faults on any stereo input;
-  measured, and not specific to a container or source codec. Forcing mono would
-  "work" by silently discarding a channel, so Onhand says what happened
-  instead.
+- **Single-threaded ffmpeg**, deliberately. The threaded core is 2x faster on
+  video (161 ms vs 338 ms, measured) and froze three separate ways getting
+  there: x264 deadlocks above four threads, the filter pools deadlock
+  independently and broke every GIF conversion, and on WebKit its 32
+  pre-allocated workers starve a ten-file batch. The reasoning is written up in
+  `ffmpegEngine.ts`. A freeze on someone's phone is not worth 2x on the one
+  path that would benefit.
 
 ## Development
 
@@ -174,7 +177,7 @@ skipping those hooks yields a site whose audio conversions 404 and which has no
 offline support, with no error to explain either.
 
 Conversion tests need a real browser, because mocking a wasm codec tests the
-mock. **570 browser tests run across Chromium, Firefox and WebKit**, plus 78 in
+mock. **576 browser tests run across Chromium, Firefox and WebKit**, plus 79 in
 node. The cross-browser matrix runs nightly rather than per-push: browser
 differences change with browser releases, not with our commits.
 

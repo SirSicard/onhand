@@ -18,7 +18,11 @@ stated plainly so you can disagree with it.
 | Licence       | **GPL-2.0-or-later**                                                        |
 | Source        | https://github.com/ffmpegwasm/ffmpeg.wasm (which builds https://ffmpeg.org) |
 | How it ships  | `public/ffmpeg/ffmpeg-core.wasm.gz`, unmodified, served from our own origin |
-| When it loads | Only when a conversion needs it — MP3 or Vorbis output, or an AVI input     |
+| When it loads | Only when a conversion needs it — MP3 or Vorbis output, an AVI input, a GIF |
+
+The threaded build (`@ffmpeg/core-mt`, same licence) was evaluated and is not
+shipped — it is 2x faster on video and froze three different ways. The reasoning
+is in `src/engine/engines/ffmpegEngine.ts`.
 
 **We distribute this binary**, so the GPL's source-availability obligation
 applies to it. It is unmodified upstream, and the corresponding source is at the

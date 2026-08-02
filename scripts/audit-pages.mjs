@@ -41,6 +41,10 @@ async function allPages(dir = dist, prefix = "/") {
     const full = join(dir, entry.name);
     if (entry.isDirectory()) out.push(...(await allPages(full, `${prefix}${entry.name}/`)));
     else if (entry.name === "index.html") out.push(prefix);
+    // 404.html is a page too, and it is the one nobody looks at. It is not an
+    // index.html in a directory, so matching only those quietly skipped it —
+    // the audit reported 158 of 159 built pages and read as complete.
+    else if (entry.name === "404.html") out.push(`${prefix}404.html`);
   }
   return out.sort();
 }
@@ -53,7 +57,11 @@ const pages = await allPages();
 const dangling = [];
 
 for (const path of pages) {
-  const file = join(dist, path === "/" ? "" : path, "index.html");
+  // A path ending in .html IS the file; everything else is a directory whose
+  // index.html is.
+  const file = path.endsWith(".html")
+    ? join(dist, path)
+    : join(dist, path === "/" ? "" : path, "index.html");
   const html = await readFile(file, "utf8");
 
   const refs = [
@@ -97,6 +105,7 @@ const SAMPLE = [
   { path: "/tools/remove-exif/", why: "an intent page" },
   { path: "/heic-to-jpg/", why: "a pair page" },
   { path: "/opus-to-ogg/", why: "a long-tail pair page, which uses the same template" },
+  { path: "/404.html", why: "the not-found page, which Cloudflare serves for any bad URL" },
 ];
 
 const server = spawn("node", [join(root, "scripts", "serve-dist.mjs"), String(PORT)], {

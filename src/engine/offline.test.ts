@@ -93,8 +93,12 @@ describe("pairs that always need the 9.7 MB engine", () => {
     // browser has a GIF encoder, so it is ALWAYS ffmpeg, and this reported
     // "works offline" on a fresh visit until it was caught on the live site.
     for (const source of ["mp4", "mov", "webm", "mkv", "avi"] as const) {
+      // Matched without a leading directory: there are two cores, at /ffmpeg/
+      // and /ffmpeg/mt/, and which one a visitor cached depends on their
+      // machine. Hardcoding one path made this report every ffmpeg pair as
+      // unavailable offline on any multi-core device.
       expect(assetsForPair(source, "gif"), `${source} → gif claims to need no assets`).toContain(
-        "/ffmpeg/ffmpeg-core.wasm.gz",
+        "ffmpeg-core.wasm.gz",
       );
     }
   });
