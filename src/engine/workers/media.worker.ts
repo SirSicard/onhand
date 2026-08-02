@@ -99,11 +99,29 @@ class NotMyJobError extends Error {
  */
 function videoBitrate(width: number, height: number, opts: ConvertOptions): number {
   if (opts.videoBitrateKbps) return opts.videoBitrateKbps * 1000;
+
   const pixels = width * height;
-  if (pixels >= 3840 * 2160) return 20_000_000;
-  if (pixels >= 1920 * 1080) return 8_000_000;
-  if (pixels >= 1280 * 720) return 5_000_000;
-  return 2_500_000;
+  const base =
+    pixels >= 3840 * 2160
+      ? 20_000_000
+      : pixels >= 1920 * 1080
+        ? 8_000_000
+        : pixels >= 1280 * 720
+          ? 5_000_000
+          : 2_500_000;
+
+  // Scale by the quality preset. Without this the resolution floor WAS the
+  // answer at every setting, so Smallest, Balanced and Best encoded the video
+  // track identically and only the audio bitrate moved — a control that looked
+  // like a size/quality trade and was not one.
+  //
+  // 80 is the Balanced preset, so it maps to exactly the floor above and the
+  // previous behaviour is preserved in the middle. The exponent gives roughly
+  // half the bitrate at Smallest and 1.4× at Best, which is a spread people can
+  // both see and measure. WebCodecs has no CRF equivalent — VideoEncoder takes
+  // a bitrate — so this is the only lever on this path.
+  const scale = (Math.min(100, Math.max(1, opts.quality ?? 80)) / 80) ** 1.8;
+  return Math.round(base * scale);
 }
 
 export interface MediaConvertResult {

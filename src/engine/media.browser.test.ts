@@ -391,3 +391,60 @@ describe("failure behaviour", () => {
     await expect(convert(junk, "mp4", "mp3", {}, () => {})).rejects.toThrow(/could not|failed/i);
   }, 180_000);
 });
+
+describe("the quality preset on a video track", () => {
+  it("changes the video, not just the audio", async () => {
+    // Regression, and a measured one. Neither engine applied `quality` to the
+    // video: WebCodecs fell to a resolution-derived floor and ffmpeg set no
+    // -crf, so Smallest / Balanced / Best encoded the picture identically and
+    // only the audio bitrate moved. Three runs came back at 350,381 bytes each.
+    //
+    // Audio is held constant here precisely so it cannot mask the result — it
+    // was what made the bug look fixed when it wasn't.
+    for (const [source, target] of [
+      ["mp4", "webm"],
+      ["mp4", "mkv"],
+    ] as const) {
+      const file = await fixture("clip.mp4");
+      const sizes: number[] = [];
+      for (const quality of [55, 80]) {
+        const r = await convert(file, source, target, { quality, audioBitrateKbps: 192 }, () => {});
+        sizes.push(r.blob.size);
+      }
+      const [smallest, balanced] = sizes as [number, number];
+
+      // Only the downward direction is asserted. Raising quality above the
+      // middle cannot always grow the file — a short synthetic clip is
+      // compressible enough that the encoder never spends the extra budget —
+      // and an assertion that demands it would be testing the fixture, not us.
+      expect(
+        smallest,
+        `${source}→${target}: Smallest produced ${smallest} vs Balanced ${balanced}`,
+      ).toBeLessThan(balanced * 0.9);
+    }
+  }, 300_000);
+});
+
+describe("stereo Opus", () => {
+  it("converts a stereo AVI, keeping both channels", async () => {
+    // The one realistic file that reaches the broken encoder with no other
+    // engine able to take the job: mediabunny cannot demux AVI, so this falls
+    // to ffmpeg, whose bundled libopus (5.1.4) faults on any stereo input.
+    // clip.avi does not catch it because its audio is mono — that is exactly
+    // why stereo.avi exists.
+    //
+    // Not asserting that the direct ffmpeg path still fails. That is an upstream
+    // defect; if a future core fixes it, this test should keep passing rather
+    // than start failing. What matters is the outcome for the person.
+    const file = await fixture("stereo.avi");
+    const result = await convertOrExplain(file, "avi", "opus");
+
+    expect(result.blob.size, "produced an empty file").toBeGreaterThan(1000);
+
+    // And genuinely stereo. Forcing -ac 1 would have "fixed" the crash by
+    // silently throwing a channel away, which is the thing we refused to do.
+    const ctx = new OfflineAudioContext(2, 1, 48_000);
+    const decoded = await ctx.decodeAudioData(await result.blob.arrayBuffer());
+    expect(decoded.numberOfChannels, "a channel was silently discarded").toBe(2);
+  }, 300_000);
+});

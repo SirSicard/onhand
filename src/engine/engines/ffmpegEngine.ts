@@ -16,6 +16,32 @@ import { ConversionError, type ConvertOptions, type Engine, type ProgressUpdate 
  * scripts/sync-ffmpeg-core.mjs for why that is not negotiable.
  */
 
+/**
+ * Single-threaded, and that is a decision rather than an oversight.
+ *
+ * @ffmpeg/core-mt was built, wired up and measured: 2.1x faster on video
+ * (161 ms vs 338 ms on an 18-core machine, same file, same args). It is not
+ * shipped, because getting there surfaced three separate ways for it to hang
+ * forever, and this product's whole claim is that it works and tells the truth:
+ *
+ *   1. x264 deadlocks above four threads under wasm. ffmpeg defaults to one
+ *      thread per core, so an 18-core machine asked for 18 and froze. Not pool
+ *      exhaustion — emscripten pre-allocates 32 workers.
+ *   2. Bounding codec threads was not enough: the FILTER pools default the same
+ *      way, so every GIF conversion (palettegen/paletteuse) still froze. All
+ *      four GIF tests hung.
+ *   3. On WebKit, the core's 32 pre-allocated pthread workers plus this app's
+ *      own image and media pools starve a batch. Ten files in, six finish.
+ *      Sequential jobs were fine, which is why nothing smaller caught it.
+ *
+ * The benefit is also narrower than it looks: MP3, Vorbis and GIF palette work
+ * are single-threaded regardless, so the gain applies only to video re-encodes
+ * on the ffmpeg path — Firefox's AAC fallback, and AVI sources.
+ *
+ * A freeze on someone's phone is not worth 2x on that slice. The stall detector
+ * below stays, because it was the thing that turned these hangs into visible
+ * errors, and it protects every other ffmpeg job too.
+ */
 const CORE_URL = "/ffmpeg/ffmpeg-core.js";
 /**
  * Gzipped, and that is not an optimisation.
@@ -39,7 +65,7 @@ const WASM_URL = "/ffmpeg/ffmpeg-core.wasm.gz";
  * Fetching still goes through the normal HTTP cache, so the 32 MB stays a
  * one-time cost across visits.
  */
-let blobUrls: Promise<{ coreURL: string; wasmURL: string }> | null = null;
+let blobUrls: Promise<{ coreURL: string; wasmURL: string; workerURL?: string }> | null = null;
 
 /** Every wasm module starts with these four bytes. */
 const WASM_MAGIC = [0x00, 0x61, 0x73, 0x6d];
@@ -143,15 +169,20 @@ async function gunzipIfNeeded(buffer: ArrayBuffer): Promise<ArrayBuffer> {
   return new Response(stream).arrayBuffer();
 }
 
+/** Fetch a script and wrap it in a blob URL, refusing an HTML 404 page. */
+async function scriptBlob(url: string, what: string): Promise<string> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`${what} returned ${response.status}`);
+  const text = await response.text();
+  if (/^\s*<!doctype|^\s*<html/i.test(text)) {
+    throw new Error(`the server returned a web page instead of ${what}`);
+  }
+  return URL.createObjectURL(new Blob([text], { type: "text/javascript" }));
+}
+
 function coreBlobUrls() {
   blobUrls ??= (async () => {
-    const coreResponse = await fetch(CORE_URL);
-    if (!coreResponse.ok) throw new Error(`engine script returned ${coreResponse.status}`);
-    const coreText = await coreResponse.text();
-    if (/^\s*<!doctype|^\s*<html/i.test(coreText)) {
-      throw new Error("the server returned a web page instead of the engine script");
-    }
-    const coreURL = URL.createObjectURL(new Blob([coreText], { type: "text/javascript" }));
+    const coreURL = await scriptBlob(CORE_URL, "the engine script");
 
     // Only the core wasm is worth reporting progress on, and that progress is
     // real — read from Content-Length — so the number shown is a measurement
@@ -187,6 +218,48 @@ function withDeadline<T>(promise: Promise<T>, ms: number, what: string): Promise
       timer = setTimeout(() => reject(new Error(`Timed out after ${ms / 1000}s: ${what}`)), ms);
     }),
   ]).finally(() => clearTimeout(timer)) as Promise<T>;
+}
+
+/**
+ * How long ffmpeg may go completely silent before we call it stuck.
+ *
+ * A deadline on total duration would be wrong — a long video legitimately takes
+ * minutes — so this watches for SILENCE instead. ffmpeg emits a log line per
+ * frame batch, so no output at all for this long means it is not working.
+ *
+ * This exists because `exec` had no bound of any kind. `load` did, and the
+ * comment there says exactly why: a hang that cannot reject leaves a job at
+ * "converting" for the rest of the session with nothing in the console. The
+ * same was true one line later and nobody had noticed, because nothing had hung
+ * there yet. Wiring up the threaded core made it happen — x264 deadlocks above
+ * four threads under wasm — and it hung for the full five-minute test timeout
+ * rather than reporting anything.
+ */
+const EXEC_STALL_MS = 45_000;
+
+/**
+ * Reject if `isAlive` stops advancing. Runs the recovery first, because a
+ * deadlocked wasm instance never becomes usable again.
+ */
+function withStall<T>(
+  promise: Promise<T>,
+  lastActivity: () => number,
+  recover: () => void,
+): Promise<T> {
+  let timer: ReturnType<typeof setInterval>;
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      timer = setInterval(() => {
+        if (performance.now() - lastActivity() < EXEC_STALL_MS) return;
+        clearInterval(timer);
+        recover();
+        reject(
+          new Error(`the engine stopped responding after ${EXEC_STALL_MS / 1000}s of silence`),
+        );
+      }, 2_000);
+    }),
+  ]).finally(() => clearInterval(timer)) as Promise<T>;
 }
 
 let instance: FFmpeg | null = null;
@@ -302,6 +375,27 @@ const AUDIO_CODEC: Partial<Record<FormatId, string[]>> = {
   wav: ["-c:a", "pcm_s16le"],
 };
 
+/**
+ * The usable CRF range per encoder, as [worst, best].
+ *
+ * Not the codecs' full ranges — x264 accepts 0–51 and VP9 0–63, but the ends of
+ * both are useless: below ~16 the file balloons for no visible gain, above ~40
+ * it is mush. These are the spans where the quality control actually trades
+ * something a person would notice.
+ */
+const CRF_RANGE: Partial<Record<FormatId, [number, number]>> = {
+  mp4: [38, 16],
+  mov: [38, 16],
+  mkv: [38, 16],
+  webm: [45, 20], // VP9's scale runs higher for equivalent quality
+};
+
+/** Map a 1–100 quality onto an encoder's CRF scale. Lower CRF is better. */
+function crfFor(target: FormatId, quality = 80): number {
+  const [worst, best] = CRF_RANGE[target] ?? [38, 16];
+  return Math.round(worst + (best - worst) * (Math.min(100, Math.max(1, quality)) / 100));
+}
+
 const VIDEO_ARGS: Partial<Record<FormatId, string[]>> = {
   // yuv420p is not an aesthetic choice: 4:4:4 H.264 plays in almost nothing,
   // and ffmpeg will happily produce it from a 4:4:4 source.
@@ -392,7 +486,27 @@ function buildArgs(
     if (target === "ogg") args.push("-strict", "experimental");
   } else {
     args.push(...(VIDEO_ARGS[target] ?? []));
-    if (options.videoBitrateKbps) args.push("-b:v", `${options.videoBitrateKbps}k`);
+
+    // An explicit bitrate wins; otherwise the quality preset drives CRF.
+    //
+    // Before this, neither was set on a video → video job, so libx264 and
+    // libvpx-vp9 both ran at their built-in defaults and Smallest, Balanced and
+    // Best produced BYTE-IDENTICAL output. Measured, not suspected: three runs
+    // at 350,381 bytes. The only thing the preset changed was the audio track,
+    // which on a real video is a rounding error next to the picture.
+    //
+    // CRF rather than a bitrate because it is resolution-independent — a target
+    // quality rather than a target size — so it does the right thing on a phone
+    // clip and a 4K screen recording without a table of resolutions.
+    if (options.videoBitrateKbps) {
+      args.push("-b:v", `${options.videoBitrateKbps}k`);
+    } else {
+      args.push("-crf", String(crfFor(target, options.quality)));
+      // VP9 only honours CRF as constant-quality when the bitrate is 0.
+      // Without this it silently runs in constrained-quality mode and the CRF
+      // becomes an upper bound rather than the target.
+      if (target === "webm") args.push("-b:v", "0");
+    }
 
     // H.264 cannot encode odd dimensions. Rounding down to even is invisible;
     // failing with "width not divisible by 2" is how a phone crop breaks a
@@ -452,7 +566,12 @@ export const ffmpegEngine: Engine = {
     const inName = `in.${FORMATS[source].ext}`;
     const outName = `out.${FORMATS[target].ext}`;
 
+    // Liveness, for the stall detector below. ffmpeg is chatty while it works —
+    // a line per frame batch — so silence is a genuine signal that it stopped.
+    let lastActivity = performance.now();
+
     const onLog = ({ message }: { message: string }) => {
+      lastActivity = performance.now();
       // A ring of the recent lines, not just the last one.
       //
       // Keeping only the most recent line looked reasonable and was useless:
@@ -476,6 +595,7 @@ export const ffmpegEngine: Engine = {
         .join("\n");
 
     const onFfmpegProgress = ({ progress }: { progress: number }) => {
+      lastActivity = performance.now();
       // ffmpeg's progress is derived from log parsing and is unreliable for
       // some containers — it reports NaN, or values above 1, or nothing at all.
       // An indeterminate spinner is honest; a fabricated percentage is not.
@@ -497,7 +617,11 @@ export const ffmpegEngine: Engine = {
     try {
       await ff.writeFile(inName, new Uint8Array(await file.arrayBuffer()));
 
-      const code = await ff.exec(buildArgs(inName, outName, source, target, options));
+      const code = await withStall(
+        ff.exec(buildArgs(inName, outName, source, target, options)),
+        () => lastActivity,
+        resetFfmpeg,
+      );
       if (code !== 0) {
         throw new ConversionError(
           "corrupt",
