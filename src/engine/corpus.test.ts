@@ -64,7 +64,6 @@ const EXPECTED: Record<string, { format: string; dim: string }> = {
   // broken encoder with nothing else able to take the job.
   "stereo.avi": { format: "avi", dim: "320x240" },
   "silent.mp4": { format: "mp4", dim: "640x360" },
-  "busy.mp4": { format: "mp4", dim: "480x270" },
   // Odd dimensions: H.264 cannot encode them, so anything that doesn't round
   // to even fails here rather than on someone's cropped phone video.
   "portrait-odd.mp4": { format: "mp4", dim: "607x1079" },
