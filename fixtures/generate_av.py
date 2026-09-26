@@ -147,6 +147,16 @@ def main() -> int:
         [*VIDEO_IN, "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", "-b:v", "300k"],
         "silent.mp4",
     )
+    # Busy video, no audio: moving grain on the test pattern, so no encoder reaches its best quality under any
+    # preset's bitrate. clip.mp4 cannot test the quality preset on every engine: on Linux WebKit its video came out
+    # at ~48 kbit/s at every preset (2026-09-26), below even Smallest's budget, so the files were byte-identical.
+    # Capped hard so the grain does not balloon the fixture.
+    results["busy.mp4"] = ff(
+        ["-f", "lavfi", "-i", "testsrc2=size=480x270:rate=24:duration=2,noise=alls=30:allf=t",
+         "-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p",
+         "-b:v", "800k", "-maxrate", "800k", "-bufsize", "800k"],
+        "busy.mp4",
+    )
     # Portrait, odd dimensions. Encoders that assume even sizes fail on this, and
     # 1079 is exactly the kind of number a phone crop produces.
     results["portrait-odd.mp4"] = ff(

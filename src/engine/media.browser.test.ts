@@ -407,7 +407,13 @@ describe("the quality preset on a video track", () => {
     // exists to prove real bytes differ, which one pair does. Four crashed the
     // CI runner's tab: its Chromium has no AAC encoder, so every video job
     // there goes through ffmpeg and the wasm heap does not shrink between them.
-    const file = await fixture("clip.mp4");
+    //
+    // busy.mp4, not clip.mp4 (2026-09-26). The plain test pattern is too easy:
+    // on Linux WebKit its video reached the encoder's best quality at ~48 kbit/s,
+    // under even Smallest's budget, so every preset gave the same 60,283 bytes,
+    // while the same encoder spent 3.4x more at 2M than at 100k on noise. The
+    // grain in busy.mp4 needs more than any preset allows, so the preset shows.
+    const file = await fixture("busy.mp4");
     const sizes: number[] = [];
     for (const quality of [55, 80]) {
       const r = await convert(file, "mp4", "webm", { quality, audioBitrateKbps: 192 }, () => {});
@@ -416,9 +422,8 @@ describe("the quality preset on a video track", () => {
     const [smallest, balanced] = sizes as [number, number];
 
     // Only the downward direction is asserted. Raising quality above the
-    // middle cannot always grow the file — a short synthetic clip is
-    // compressible enough that the encoder never spends the extra budget —
-    // and an assertion that demands it would be testing the fixture, not us.
+    // middle cannot always grow the file, and an assertion that demands it
+    // would be testing the fixture, not us.
     expect(smallest, `Smallest produced ${smallest} vs Balanced ${balanced}`).toBeLessThan(
       balanced * 0.9,
     );
