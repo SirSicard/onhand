@@ -178,8 +178,9 @@ offline support, with no error to explain either.
 
 Conversion tests need a real browser, because mocking a wasm codec tests the
 mock. **576 browser tests run across Chromium, Firefox and WebKit**, plus 83 in
-node. The cross-browser matrix runs nightly rather than per-push: browser
-differences change with browser releases, not with our commits.
+node. CI runs the node tests and the Chromium suite on every push to `main` and
+on every pull request. The cross-browser matrix (`cross-browser.yml`) has been
+switched off since 2026-09-25; `pnpm test:browser:all` runs all three locally.
 
 ## Contributing
 

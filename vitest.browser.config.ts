@@ -3,6 +3,28 @@ import tailwindcss from "@tailwindcss/vite";
 import { fileURLToPath } from "node:url";
 import { readFileSync } from "node:fs";
 
+type BrowserName = "chromium" | "firefox" | "webkit";
+
+/**
+ * Chromium runs as the full browser in headless mode, not as Playwright's
+ * default `chrome-headless-shell`.
+ *
+ * The shell is a separate, stripped-down binary, and it handles a wasm fault
+ * differently: its renderer takes a SIGSEGV and the whole tab dies, where the
+ * full browser raises a catchable `RuntimeError: memory access out of bounds`.
+ * The stereo Opus test depends on that error — ffmpeg.wasm's libopus faults on
+ * stereo, and the broker catches it and bridges through WAV. On the Linux
+ * runner the shell crashed instead ("Received signal 11 SEGV_ACCERR", then
+ * vitest's "Browser connection was closed"), which kept CI red from 2026-08-02
+ * on a test that passes in the full browser. Measured on CI: that test alone
+ * crashes the shell and passes on `channel: "chromium"`.
+ *
+ * `playwright install chromium` fetches both binaries, so CI needs no change.
+ */
+function instance(browser: BrowserName) {
+  return browser === "chromium" ? { browser, launch: { channel: "chromium" } } : { browser };
+}
+
 /**
  * Browser-mode suite: the real conversion matrix.
  *
@@ -101,10 +123,10 @@ export default defineConfig({
       // one 2-core box ran ffmpeg out of heap, and the OOM looked like a codec
       // bug rather than the memory contention it was.
       instances: process.env.ONHAND_BROWSER
-        ? [{ browser: process.env.ONHAND_BROWSER as "chromium" | "firefox" | "webkit" }]
+        ? [instance(process.env.ONHAND_BROWSER as BrowserName)]
         : process.env.ONHAND_ALL_BROWSERS
-          ? [{ browser: "chromium" }, { browser: "firefox" }, { browser: "webkit" }]
-          : [{ browser: "chromium" }],
+          ? [instance("chromium"), instance("firefox"), instance("webkit")]
+          : [instance("chromium")],
     },
   },
   resolve: {
