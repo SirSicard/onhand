@@ -1,3 +1,5 @@
+> Content review September 14, 2026: The opening unchecked tasks are the original plan. Dated implementation/errata sections below supersede them. Current `.nvmrc` specifies **Node 26**, matching README; the initial Node 22 checkbox is historical. The product already has implemented source and build hooks. This cleanup does not assert fresh CI or deployment status.
+
 # ONHAND — battle plan for Opus
 
 **You are building a client-side file converter.** Read `RESEARCH.md` (market + tech facts)

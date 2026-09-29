@@ -200,5 +200,5 @@ change to drop the GPL component, and what that would cost.
 ---
 
 <div align="center">
-<sub>Built by <a href="https://github.com/SirSicard">Mattias Herzig</a>. No accounts, no telemetry, no ads, no paid tier.</sub>
+<sub>Built by <a href="https://github.com/SirSicard">Mattias Hjemgaard</a>. No accounts, no telemetry, no ads, no paid tier.</sub>
 </div>
